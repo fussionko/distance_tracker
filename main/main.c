@@ -12,9 +12,9 @@
 #include "ultrasonic_sensor.h"
 
 // Temp values
-#define GPIO_TRIGGER    1
-#define GPIO_ECHO_LEFT  2
-#define GPIO_ECHO_RIGHT 3
+#define GPIO_TRIGGER    4
+#define GPIO_ECHO_LEFT  0
+#define GPIO_ECHO_RIGHT 2
 
 // CMD codes
 #define CMD_START   100 
