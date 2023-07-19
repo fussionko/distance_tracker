@@ -1,9 +1,13 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_system.h"
 
 #include "ultrasonic_sensor.h"
 
@@ -18,11 +22,13 @@
 #define CMD_MEASURE 300
 #define CMD_CLEAR   400
 
+QueueHandle_t xQueueCmd;
+
 // CMD structure
 typedef struct 
 {
     uint16_t command;
-    uint32_t distance;
+    uint32_t distance_left, distance_right;
     TaskHandle_t taskHandle;
 } CMD_t;
 
@@ -43,15 +49,45 @@ void ultrasonic_read()
         uint32_t distance_left, distance_right;
         esp_err_t res = ultrasonic_measure_cm(&ultrasonic_sensor, &distance_left, &distance_right);
 
-        
+        // Handle error
+        if (res != ESP_OK)
+        {
+            printf("Error: ");
+		    switch (res) 
+            {
+		    	case ESP_ERR_ULTRASONIC_SENSOR_PING:
+		    		printf("Cannot ping (device is in invalid state)\n");
+		    		break;
+		    	case ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT:
+		    		printf("Ping timeout (no device found)\n");
+		    		break;
+		    	case ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT:
+		    		printf("Echo timeout (i.e. distance too big)\n");
+		    		break;
+		    	default:
+		    		printf("%d\n", res);
+		    }
+        }
+        else
+        {
+            printf("Distance LEFT: %"PRIu32" cm, %.02f m\n", distance_left, distance_left / 100.0);
+            printf("Distance RIGHT: %"PRIu32" cm, %.02f m\n", distance_right, distance_right / 100.0); 
+
+            cmdBuf.distance_left = distance_left;
+            cmdBuf.distance_right = distance_right;
+            xQueueSend(xQueueCmd, &cmdBuf, 0);
+        }
+        printf("-------------------------------\n");
+
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }    
 }
 
 void app_main(void)
 {
 	/* Create Queue */
-	xQueueCmd = xQueueCreate( 10, sizeof(CMD_t) );
-	configASSERT( xQueueCmd );
-    	xTaskCreate(ultrasonic, "ultrasonic", 1024*2, NULL, 2, NULL);
-	xTaskCreate(tft, "TFT", 1024*4, NULL, 2, NULL);
+	xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
+	configASSERT(xQueueCmd);
+
+    xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
 }
