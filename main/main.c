@@ -13,7 +13,7 @@
 
 // Temp values
 #define GPIO_TRIGGER    4
-#define GPIO_ECHO_LEFT  0
+#define GPIO_ECHO_LEFT  15
 #define GPIO_ECHO_RIGHT 2
 
 // CMD codes
@@ -44,6 +44,7 @@ void ultrasonic_read()
     ultrasonic_sensor_init(&ultrasonic_sensor);
 
     // Infinite loop -> prob change in future to certain amount of repetition
+    ESP_LOGI("loop", "START");
     while(true)
     {
         uint32_t distance_left, distance_right;
