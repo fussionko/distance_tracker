@@ -2,6 +2,8 @@
 #define _ULTRASONIC_SENSOR_H__
 
 #include "esp_log.h"
+#include "esp_timer.h"
+#include <driver/gpio.h>
 
 #define ESP_ERR_ULTRASONIC_SENSOR_PING          0x200   
 #define ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT  0x201
@@ -10,7 +12,8 @@
 // Max distance that sensor can read [cm]
 #define MAX_DISTANCE 400
 
-#include <driver/gpio.h>
+
+
 
 // 1 trigger 2 echo pins
 typedef struct 
