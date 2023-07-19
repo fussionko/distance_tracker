@@ -5,7 +5,8 @@
 #define ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT  0x201
 #define ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT  0x202
 
-#define MAX_DISTANCE
+// Max distance that sensor can read [cm]
+#define MAX_DISTANCE 400
 
 #include <driver/gpio.h>
 
