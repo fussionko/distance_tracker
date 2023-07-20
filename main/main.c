@@ -5,8 +5,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_system.h"
 
 #include "ultrasonic_sensor.h"
@@ -43,14 +45,35 @@ void ultrasonic_read()
 
     ultrasonic_sensor_init(&ultrasonic_sensor);
 
+
+    interrupt_init(&ultrasonic_sensor);
+   // interrupt_enable(&ultrasonic_sensor);
+
+    
+
+
+    // Create ping timeout timer
+    esp_timer_handle_t ping_timer;
+    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, SIDE_NONE };
+    create_timer(&ping_timer, timer_callback, "Ping timer", &timer_arg);
+
+
     // Infinite loop -> prob change in future to certain amount of repetition
     ESP_LOGI("loop", "START");
     while(true)
     {
+        ESP_LOGI("trigger", "START");
+        trigger(&ultrasonic_sensor);
+
         uint32_t distance_left, distance_right;
-        esp_err_t res = ultrasonic_measure_cm(&ultrasonic_sensor, &distance_left, &distance_right);
+        ESP_LOGI("measure", "START");
+        esp_err_t res = measure(&ping_timer, &distance_left, &distance_right);
+
+        // 
+        // esp_err_t res = ultrasonic_measure_cm(&ultrasonic_sensor, &distance_left, &distance_right);
 
         // Handle error
+        ESP_LOGI("handle_error", "START");
         if (res != ESP_OK)
         {
             printf("Error: ");

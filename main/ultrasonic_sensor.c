@@ -4,12 +4,12 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "sys/time.h"
-#include "esp_timer.h"
+
 #include "esp_check.h"
 
 #define TRIGGER_LOW_DELAY 4
 #define TRIGGER_HIGH_DELAY 10
-#define PING_TIMEOUT 6000
+#define PING_TIMEOUT 3000000 // 3s
 
 // Calc: 331.5+0.61*temperature[m/sec]
 // TODO change with temp sensor -> humidity
@@ -22,11 +22,13 @@ typedef struct
     uint32_t* distance;
 } measure_param;
 
-static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+//static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
-#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
-#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
+//#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
+//#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
 
+
+QueueHandle_t queue_handle;
 
 // Gets current time []
 static inline uint32_t get_time_us()
@@ -36,21 +38,35 @@ static inline uint32_t get_time_us()
     return tv.tv_usec;
 }
 
-typedef struct 
-{
-    uint32_t time_start, time_end;
-    esp_err_t error;
-} time_data_t;
+
 
 typedef struct 
 { 
     gpio_num_t echo_pin;
-    QueueHandle_t* queue;
-    esp_timer_handle_t* timer;
+    side_t side;
 } isr_arg_t;
 
+static void IRAM_ATTR intr_handler(void* args)
+{   
+    // Cast to arg
+    isr_arg_t* isr_arg = (isr_arg_t*)args;
 
+    // Check high
+    if (gpio_get_level(isr_arg->echo_pin))
+    {
+        event_t event = { EVENT_ULTRASONIC_SENSOR_ECHO_START, isr_arg->side };
 
+        // Send data to queue
+        xQueueSendFromISR(queue_handle, &event, NULL);  
+    }
+    else
+    {
+        event_t event = { EVENT_ULTRASONIC_SENSOR_ECHO_END, isr_arg->side };
+        
+        // Send data to queue
+        xQueueSendFromISR(queue_handle, &event, NULL);
+    }   
+}
 
 void interrupt_init(const ultrasonic_sensor_t* sensor)
 {
@@ -58,21 +74,31 @@ void interrupt_init(const ultrasonic_sensor_t* sensor)
     gpio_set_intr_type(sensor->echo_left, GPIO_INTR_ANYEDGE);
     gpio_set_intr_type(sensor->echo_right, GPIO_INTR_ANYEDGE);
 
+    // gpio_pulldown_en(sensor->echo_left);
+    // gpio_pullup_dis(sensor->echo_left);
+
+    // gpio_pulldown_en(sensor->echo_right);
+    // gpio_pullup_dis(sensor->echo_right);
+
     // Allocate resources
     gpio_install_isr_service(0);
 
     /*
         Args:
-            -> pin
+            -> echo pin
+            -> side (left or right)
             -> queue
-            -> timer
     */
-    isr_arg_t isr_arg_left;
-    // Add isr handlers
-    gpio_isr_handler_add(sensor->echo_left, intr_handler_left, (void*)&isr_arg_left);
-    gpio_isr_handler_add(sensor->echo_right, intr_handler_left, (void*)PARAMS); // change to right
+    isr_arg_t isr_arg_left = { sensor->echo_left, LEFT_SIDE };
+    isr_arg_t isr_arg_right = { sensor->echo_right, RIGHT_SIDE };    
 
-    interrupt_disable(sensor);
+    // Add isr handlers
+    gpio_isr_handler_add(sensor->echo_left, intr_handler, (void*)&isr_arg_left);
+    gpio_isr_handler_add(sensor->echo_right, intr_handler, (void*)&isr_arg_right); // change to right
+
+    //interrupt_disable(sensor);
+
+    queue_handle = xQueueCreate(5, sizeof(event_t));
 }
 
 esp_err_t interrupt_enable(const ultrasonic_sensor_t* sensor)
@@ -90,13 +116,14 @@ esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
 }
 
 
-void create_timer(esp_timer_handle_t* timer_handler, esp_timer_cb_t* callback, char* name)
+void create_timer(esp_timer_handle_t* timer_handler, esp_timer_cb_t callback, char* name, void* callback_arg)
 {
     // Setup timer
     const esp_timer_create_args_t timer_args = 
     {
-        .callback = callback,
-        .name = name
+        .callback = *callback,
+        .name = name,
+        .arg = callback_arg
     };
 
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, timer_handler));
@@ -105,80 +132,72 @@ void create_timer(esp_timer_handle_t* timer_handler, esp_timer_cb_t* callback, c
 
 
 
-
-static void IRAM_ATTR intr_handler_left(void* args)
-{   
-    // Cast to arg
-    isr_arg_t* isr_arg = (isr_arg_t*)args;
-
-    // check if its RISING or FALLING -> send to xQueue (start or end time)
-
-    // Check high
-    if (gpio_get_level(isr_arg->echo_pin))
-    {
-        // Stop timer
-        esp_timer_stop(isr_arg->timer);
-
-        // Get passed time from timer
-        uint64_t time;
-        esp_err_t error = esp_timer_get_expiry_time(isr_arg->timer, &time); 
-
-        time_data_t time_data = { time, 0, error};
-
-        // Send data to queue
-        xQueueSendFromISR(*(isr_arg->queue), &time_data, NULL);  
-    }
-    else
-    {
-        xQueueSendFromISR(isr_arg->queue, ITEM_TO_QUEUE, NULL);
-    }   
+void timer_callback(void* args)
+{
+    xQueueSendToFrontFromISR(queue_handle, (event_t*)args, NULL);
 }
 
-
-void temp(QueueHandle_t* queue, esp_timer_handle_t* meas_timer)
+esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint32_t* distance_right)
 {
-    time_data_t time_data_left;
+    event_t event;
 
+    // Init values to 0
+    uint32_t time_left_start = 0, time_left_end = 0;
+    uint32_t time_right_start = 0, time_right_end = 0;
+
+    // Start timeout timer
+    esp_timer_start_once(*ping_timer, PING_TIMEOUT);
+
+    ESP_LOGI("measure", "start");
     while(1)
     {
-        // Check if data was added to queue
-        if (xQueueReceive(queue, &time_data_left, 0))
+        // Check if event was added to queue
+        if (xQueueReceive(queue_handle, &event, 0))
         {
-            // Check if data was 0
-            if (time_data_left == 0)
+            ESP_LOGI("measure", "xQueueReceive");
+            if (event.event_code == EVENT_ULTRASONIC_SENSOR_ECHO_START)
+            {
+                ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_START");
+                uint32_t time_start = get_time_us();
+                if (event.side == LEFT_SIDE)
+                    time_left_start = time_start;
+                else
+                    time_right_start = time_start;
+            }
+            else if (event.event_code == EVENT_ULTRASONIC_SENSOR_ECHO_END)
+            {
+                ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_END");
+                uint32_t time_end = get_time_us();
+                if (event.side == LEFT_SIDE)
+                    time_left_end = time_end;
+                else
+                    time_right_end = time_end;
 
-            // Prepare meas timer
-            uint64_t meas_timeout = MAX_DISTANCE + ROUNDTRIP;
-            
 
-            // Start meas timer
-            esp_timer_start_once(*meas_timer, meas_timeout);
+                if (time_left_end != 0 && time_right_end != 0)
+                {
+                    esp_timer_stop(*ping_timer);
 
-            break;
+                    break;
+
+                } 
+            }
+            else if(event.event_code == EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT)
+            {
+                // timeout
+                ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT");
+                return ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT;
+            }
         }
     }
     
-    // Measure echo reply
-    while(1)
-    {
-        // Check if data was added to queue
-        if (xQueueReceive(queue, &time_data_left, 0))
-        {
-            break;
-        }
-    }
+    *distance_left = (time_left_end - time_left_start) / ROUNDTRIP;
+    *distance_right = (time_right_end - time_right_start) / ROUNDTRIP;
+    
+
+    return ESP_OK;
 }
 
-void timer_callback_left(void* args)
-{
-    timer_report_t* timer_report = (timer_report_t*)args;
-    timer_report->error = 
-} 
-
-void timer_callback_meas_left(void* args)
-{
-
-}
 
 
 
@@ -207,126 +226,30 @@ esp_err_t trigger(const ultrasonic_sensor_t* sensor)
     gpio_set_level(sensor->trigger, 0);
 
     // maybe need to add critical
-}
 
-void ultrasonic_measure_left_cm(void* parameter)
-{
-    ESP_LOGI("ultrasonic_measure_left_cm", "start");
-    measure_param* param = (measure_param*)parameter;
-
-    ESP_LOGI("ultrasonic_measure_left_cm", "portENTER_CRITICAL");
-    portENTER_CRITICAL(&mux);
-
-    ESP_LOGI("ultrasonic_measure_left_cm", "trigger");
-    // Sets of ultrasonic sensor 
-    gpio_set_level(param->ultrasonic_sensor->trigger, 0);
-    esp_rom_delay_us(TRIGGER_LOW_DELAY);
-    gpio_set_level(param->ultrasonic_sensor->trigger, 1);
-    esp_rom_delay_us(TRIGGER_HIGH_DELAY);
-    gpio_set_level(param->ultrasonic_sensor->trigger, 0);
-
-    ESP_LOGI("ultrasonic_measure_left_cm", "check_ping");
-    // If previous ping hasn't ended
-    if (gpio_get_level(param->ultrasonic_sensor->echo_left))
-        RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_PING, param);
-
-    	
-    // Wait for echo reply from single reciever
-    ESP_LOGI("ultrasonic_measure_left_cm", "wait echo reply");
-    uint32_t start = get_time_us();
-    while (!gpio_get_level(param->ultrasonic_sensor->echo_left))
-    {
-        if (timeout_expired(start, PING_TIMEOUT))
-            RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT, param);
-    }
-
-    // Echo recieved continue
-    ESP_LOGI("ultrasonic_measure_left_cm", "echo measure reply");
-    uint32_t echo_start = get_time_us();
-    uint32_t time = echo_start;
-    uint32_t meas_timeout = echo_start + MAX_DISTANCE + ROUNDTRIP;
-    while (gpio_get_level(param->ultrasonic_sensor->echo_left))
-    {
-        time = get_time_us();
-        if (timeout_expired(start, meas_timeout))
-            RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT, param);
-    }
-
-    portEXIT_CRITICAL(&mux);
-
-    *(param->distance) = (time - echo_start) / ROUNDTRIP;
-
-    // End task
-    param->error = ESP_OK;
-    vTaskDelete(NULL);
-}
-
-void ultrasonic_measure_right_cm(void* parameter)
-{
-    measure_param* param = (measure_param*)parameter;
-
-    portENTER_CRITICAL(&mux);
-
-    // Sets of ultrasonic sensor 
-    gpio_set_level(param->ultrasonic_sensor->trigger, 0);
-    esp_rom_delay_us(TRIGGER_LOW_DELAY);
-    gpio_set_level(param->ultrasonic_sensor->trigger, 1);
-    esp_rom_delay_us(TRIGGER_HIGH_DELAY);
-    gpio_set_level(param->ultrasonic_sensor->trigger, 0);
-
-    // If previous ping hasn't ended
-    if (gpio_get_level(param->ultrasonic_sensor->echo_right))
-        RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_PING, param);
-
-    	
-    // Wait for echo reply from single reciever
-    uint32_t start = get_time_us();
-    while (!gpio_get_level(param->ultrasonic_sensor->echo_right))
-    {
-        if (timeout_expired(start, PING_TIMEOUT))
-            RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT, param);
-    }
-
-    // Echo recieved continue
-    uint32_t echo_start = get_time_us();
-    uint32_t time = echo_start;
-    uint32_t meas_timeout = echo_start + MAX_DISTANCE + ROUNDTRIP;
-    while (gpio_get_level(param->ultrasonic_sensor->echo_right))
-    {
-        time = get_time_us();
-        if (timeout_expired(start, meas_timeout))
-            RETURN_CRITICAL(mux, ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT, param);
-    }
-
-    portEXIT_CRITICAL(&mux);
-
-    *(param->distance) = (time - echo_start) / ROUNDTRIP;
-
-    // End task
-    param->error = ESP_OK;
-    vTaskDelete(NULL);
+    return ESP_OK;
 }
 
 
-esp_err_t ultrasonic_measure_cm(const ultrasonic_sensor_t* sensor, uint32_t* distance_left, uint32_t* distance_right)
-{
-    if (distance_left == NULL || distance_left == distance_right || sensor == NULL)
-        return ESP_ERR_INVALID_ARG;
+// esp_err_t ultrasonic_measure_cm(const ultrasonic_sensor_t* sensor, uint32_t* distance_left, uint32_t* distance_right)
+// {
+//     if (distance_left == NULL || distance_left == distance_right || sensor == NULL)
+//         return ESP_ERR_INVALID_ARG;
 
-    measure_param param_left, param_right;
+//     measure_param param_left, param_right;
 
-    param_left.ultrasonic_sensor = sensor;
-    param_left.distance = distance_left;
+//     param_left.ultrasonic_sensor = sensor;
+//     param_left.distance = distance_left;
     
-    param_right.ultrasonic_sensor = sensor;
-    param_right.distance = distance_right;
+//     param_right.ultrasonic_sensor = sensor;
+//     param_right.distance = distance_right;
 
-    TaskHandle_t measure_left = NULL;
-    TaskHandle_t measure_right = NULL;
+//     TaskHandle_t measure_left = NULL;
+//     TaskHandle_t measure_right = NULL;
 
-    xTaskCreate(&ultrasonic_measure_left_cm, "Measure left sensor", 2048, (void*)&param_left, 10, &measure_left);
-    xTaskCreatePinnedToCore(&ultrasonic_measure_right_cm, "Measure lright sensor", 2048, (void*)&param_right, 10, &measure_right, 1);
+//     xTaskCreate(&ultrasonic_measure_left_cm, "Measure left sensor", 2048, (void*)&param_left, 10, &measure_left);
+//     xTaskCreatePinnedToCore(&ultrasonic_measure_right_cm, "Measure lright sensor", 2048, (void*)&param_right, 10, &measure_right, 1);
 
-    // temp;
-    return param_left.error;
-}
+//     // temp;
+//     return param_left.error;
+// }

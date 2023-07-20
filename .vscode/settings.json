@@ -12,6 +12,7 @@
         "future": "c",
         "istream": "c",
         "functional": "c",
-        "numbers": "c"
+        "numbers": "c",
+        "queue.h": "c"
     }
 }
