@@ -1,8 +1,9 @@
 #include "ultrasonic_sensor.h"
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <sys/time.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "sys/time.h"
 #include "esp_timer.h"
 #include "esp_check.h"
 
@@ -27,8 +28,6 @@ static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 #define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
 
 
-
-
 // Gets current time []
 static inline uint32_t get_time_us()
 {
@@ -37,11 +36,18 @@ static inline uint32_t get_time_us()
     return tv.tv_usec;
 }
 
-
 typedef struct 
 {
-    esp_timer_handle_t left, right;
-} arg_t;
+    uint32_t time_start, time_end;
+    esp_err_t error;
+} time_data_t;
+
+typedef struct 
+{ 
+    gpio_num_t echo_pin;
+    QueueHandle_t* queue;
+    esp_timer_handle_t* timer;
+} isr_arg_t;
 
 
 
@@ -55,15 +61,15 @@ void interrupt_init(const ultrasonic_sensor_t* sensor)
     // Allocate resources
     gpio_install_isr_service(0);
 
-    
-   
-
-
-    
-
-
+    /*
+        Args:
+            -> pin
+            -> queue
+            -> timer
+    */
+    isr_arg_t isr_arg_left;
     // Add isr handlers
-    gpio_isr_handler_add(sensor->echo_left, intr_handler_left, (void*) );
+    gpio_isr_handler_add(sensor->echo_left, intr_handler_left, (void*)&isr_arg_left);
     gpio_isr_handler_add(sensor->echo_right, intr_handler_left, (void*)PARAMS); // change to right
 
     interrupt_disable(sensor);
@@ -83,37 +89,95 @@ esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
     return ESP_OK;
 }
 
-void start_timers(esp_timer_handle_t timer_handler_left, esp_timer_handle_t timer_handler_right)
+
+void create_timer(esp_timer_handle_t* timer_handler, esp_timer_cb_t* callback, char* name)
 {
-    // Setup timers
-    const esp_timer_create_args_t timer_args_left = 
+    // Setup timer
+    const esp_timer_create_args_t timer_args = 
     {
-        .callback = &timer_callback_left,
-        .name = "Timer left"
-    };
-    const esp_timer_create_args_t timer_args_right = 
-    {
-        .callback = &timer_callback_left, // change to right
-        .name = "Timer right"
+        .callback = callback,
+        .name = name
     };
 
-    // Start both timers
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args_left, &timer_handler_left));
-    ESP_ERROR_CHECK(esp_timer_start_once(&timer_handler_left, PING_TIMEOUT));
-
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args_right, &timer_handler_right));
-    ESP_ERROR_CHECK(esp_timer_start_once(&timer_handler_right, PING_TIMEOUT));
-
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, timer_handler));
 }
+
+
+
+
 
 static void IRAM_ATTR intr_handler_left(void* args)
 {   
+    // Cast to arg
+    isr_arg_t* isr_arg = (isr_arg_t*)args;
 
+    // check if its RISING or FALLING -> send to xQueue (start or end time)
+
+    // Check high
+    if (gpio_get_level(isr_arg->echo_pin))
+    {
+        // Stop timer
+        esp_timer_stop(isr_arg->timer);
+
+        // Get passed time from timer
+        uint64_t time;
+        esp_err_t error = esp_timer_get_expiry_time(isr_arg->timer, &time); 
+
+        time_data_t time_data = { time, 0, error};
+
+        // Send data to queue
+        xQueueSendFromISR(*(isr_arg->queue), &time_data, NULL);  
+    }
+    else
+    {
+        xQueueSendFromISR(isr_arg->queue, ITEM_TO_QUEUE, NULL);
+    }   
+}
+
+
+void temp(QueueHandle_t* queue, esp_timer_handle_t* meas_timer)
+{
+    time_data_t time_data_left;
+
+    while(1)
+    {
+        // Check if data was added to queue
+        if (xQueueReceive(queue, &time_data_left, 0))
+        {
+            // Check if data was 0
+            if (time_data_left == 0)
+
+            // Prepare meas timer
+            uint64_t meas_timeout = MAX_DISTANCE + ROUNDTRIP;
+            
+
+            // Start meas timer
+            esp_timer_start_once(*meas_timer, meas_timeout);
+
+            break;
+        }
+    }
+    
+    // Measure echo reply
+    while(1)
+    {
+        // Check if data was added to queue
+        if (xQueueReceive(queue, &time_data_left, 0))
+        {
+            break;
+        }
+    }
 }
 
 void timer_callback_left(void* args)
 {
-    eso_timer_delete
+    timer_report_t* timer_report = (timer_report_t*)args;
+    timer_report->error = 
+} 
+
+void timer_callback_meas_left(void* args)
+{
+
 }
 
 
