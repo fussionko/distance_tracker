@@ -7,6 +7,11 @@
         "gpio.h": "c",
         "ultrasonic_sensor.h": "c",
         "task.h": "c",
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "memory": "c",
+        "future": "c",
+        "istream": "c",
+        "functional": "c",
+        "numbers": "c"
     }
 }
