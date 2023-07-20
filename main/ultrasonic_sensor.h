@@ -2,7 +2,7 @@
 #define _ULTRASONIC_SENSOR_H__
 
 #include "esp_log.h"
-#include "esp_timer.h"
+
 #include <driver/gpio.h>
 
 #define ESP_ERR_ULTRASONIC_SENSOR_PING          0x200   
@@ -23,8 +23,18 @@ typedef struct
 } ultrasonic_sensor_t;
 
 
+// ISR
+void interrupt_init(const ultrasonic_sensor_t* sensor);
+esp_err_t interrupt_enable(const ultrasonic_sensor_t* sensor);
+esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor);
+
+// Timers
+void start_timers(esp_timer_handle_t timer_handler_left, esp_timer_handle_t timer_handler_right);
+
+
 void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor);
 
+esp_err_t trigger(const ultrasonic_sensor_t* sensor);
 
 //esp_err_t ultrasonic_sensor_measure_cm(const ultrasonic_sensor_t* sensor, uint32_t* distance);
 

@@ -3,6 +3,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <sys/time.h>
+#include "esp_timer.h"
+#include "esp_check.h"
 
 #define TRIGGER_LOW_DELAY 4
 #define TRIGGER_HIGH_DELAY 10
@@ -24,12 +26,97 @@ static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 #define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
 #define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
 
+
+
+
+// Gets current time []
 static inline uint32_t get_time_us()
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_usec;
 }
+
+
+typedef struct 
+{
+    esp_timer_handle_t left, right;
+} arg_t;
+
+
+
+
+void interrupt_init(const ultrasonic_sensor_t* sensor)
+{
+    // Interrupt is triggerd on rising or falling edge
+    gpio_set_intr_type(sensor->echo_left, GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(sensor->echo_right, GPIO_INTR_ANYEDGE);
+
+    // Allocate resources
+    gpio_install_isr_service(0);
+
+    
+   
+
+
+    
+
+
+    // Add isr handlers
+    gpio_isr_handler_add(sensor->echo_left, intr_handler_left, (void*) );
+    gpio_isr_handler_add(sensor->echo_right, intr_handler_left, (void*)PARAMS); // change to right
+
+    interrupt_disable(sensor);
+}
+
+esp_err_t interrupt_enable(const ultrasonic_sensor_t* sensor)
+{
+    ESP_RETURN_ON_ERROR(gpio_intr_enable(sensor->echo_left), "gpio_intr_enable echo left", "left");
+    ESP_RETURN_ON_ERROR(gpio_intr_enable(sensor->echo_right), "gpio_intr_enable echo right", "right");
+    return ESP_OK;
+}
+
+esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
+{
+    ESP_RETURN_ON_ERROR(gpio_intr_disable(sensor->echo_left), "gpio_intr_disable echo left", "left");
+    ESP_RETURN_ON_ERROR(gpio_intr_disable(sensor->echo_right), "gpio_intr_disable echo right", "right");
+    return ESP_OK;
+}
+
+void start_timers(esp_timer_handle_t timer_handler_left, esp_timer_handle_t timer_handler_right)
+{
+    // Setup timers
+    const esp_timer_create_args_t timer_args_left = 
+    {
+        .callback = &timer_callback_left,
+        .name = "Timer left"
+    };
+    const esp_timer_create_args_t timer_args_right = 
+    {
+        .callback = &timer_callback_left, // change to right
+        .name = "Timer right"
+    };
+
+    // Start both timers
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args_left, &timer_handler_left));
+    ESP_ERROR_CHECK(esp_timer_start_once(&timer_handler_left, PING_TIMEOUT));
+
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args_right, &timer_handler_right));
+    ESP_ERROR_CHECK(esp_timer_start_once(&timer_handler_right, PING_TIMEOUT));
+
+}
+
+static void IRAM_ATTR intr_handler_left(void* args)
+{   
+
+}
+
+void timer_callback_left(void* args)
+{
+    eso_timer_delete
+}
+
+
 
 
 void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
@@ -44,6 +131,18 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
 
     gpio_set_level(sensor->trigger, 0);
     ESP_LOGI("ultrasonic_sensor_init", "END");
+}
+
+esp_err_t trigger(const ultrasonic_sensor_t* sensor)
+{
+    // Triggers of ultrasonic sensor 
+    gpio_set_level(sensor->trigger, 0);
+    esp_rom_delay_us(TRIGGER_LOW_DELAY);
+    gpio_set_level(sensor->trigger, 1);               
+    esp_rom_delay_us(TRIGGER_HIGH_DELAY);
+    gpio_set_level(sensor->trigger, 0);
+
+    // maybe need to add critical
 }
 
 void ultrasonic_measure_left_cm(void* parameter)
