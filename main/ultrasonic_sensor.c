@@ -7,7 +7,7 @@
 
 #include "esp_check.h"
 
-#define TRIGGER_LOW_DELAY 4
+#define TRIGGER_LOW_DELAY 2
 #define TRIGGER_HIGH_DELAY 10
 #define PING_TIMEOUT 1000000//3000000 // 3s
 
@@ -40,13 +40,13 @@ static inline uint32_t get_time_us()
 
 static void IRAM_ATTR intr_handler_left(void* args)
 {   
-    event_t event = { gpio_get_level(*(gpio_num_t*)args), LEFT_SIDE };
+    event_t event = { gpio_get_level(*(gpio_num_t*)args), LEFT_SIDE, get_time_us()  };
     xQueueSendFromISR(queue_handle, &event, NULL);
 }
 
 static void IRAM_ATTR intr_handler_right(void* args)
 {
-    event_t event = { gpio_get_level(*(gpio_num_t*)args), RIGHT_SIDE };
+    event_t event = { gpio_get_level(*(gpio_num_t*)args), RIGHT_SIDE, get_time_us() };
     xQueueSendFromISR(queue_handle, &event, NULL);
 }
 
@@ -126,6 +126,7 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
     ESP_LOGI("measure", "start");
     while(1)
     {
+        //uint32_t time = get_time_us();
         // Check if event was added to queue
         if (xQueueReceive(queue_handle, &event, 0))
         {
@@ -133,20 +134,19 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
             if (event.event_code == 1)
             {
                 ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_START");
-                uint32_t time_start = get_time_us();
+                
                 if (event.side == LEFT_SIDE)
-                    time_left_start = time_start;
+                    time_left_start = event.time;
                 else
-                    time_right_start = time_start;
+                    time_right_start = event.time;
             }
             else if (event.event_code == 0)
             {
                 ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_END");
-                uint32_t time_end = get_time_us();
                 if (event.side == LEFT_SIDE)
-                    time_left_end = time_end;
+                    time_left_end = event.time;
                 else
-                    time_right_end = time_end;
+                    time_right_end = event.time;
 
 
                 if (time_left_end != 0 && time_right_end != 0 && time_left_start != 0 && time_right_end != 0)

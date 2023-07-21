@@ -26,6 +26,7 @@ typedef struct
 {
     uint8_t event_code;
     uint8_t side;
+    uint32_t time;
 } event_t;
 
 // typedef struct 
