@@ -22,7 +22,7 @@ typedef struct
     uint32_t* distance;
 } measure_param;
 
-static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+//static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
 //#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
 //#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
@@ -129,7 +129,6 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
         // Check if event was added to queue
         if (xQueueReceive(queue_handle, &event, 0))
         {
-            
             ESP_LOGI("measure", "xQueueReceive");
             if (event.event_code == 1)
             {
@@ -168,8 +167,8 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
     
     *distance_left = (time_left_end - time_left_start) / ROUNDTRIP;
     *distance_right = (time_right_end - time_right_start) / ROUNDTRIP;
-    
-
+    printf("time left: start -> %"PRIu32" end -> %"PRIu32"\n", time_left_start, time_left_end);
+    printf("time right: start -> %"PRIu32" end -> %"PRIu32"\n", time_right_start, time_right_end);
     return ESP_OK;
 }
 
