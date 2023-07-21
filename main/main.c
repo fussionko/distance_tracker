@@ -51,10 +51,10 @@ void ultrasonic_read()
 
     
 
-
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
     // Create ping timeout timer
     esp_timer_handle_t ping_timer;
-    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, SIDE_NONE };
+    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, 2 };
     create_timer(&ping_timer, timer_callback, "Ping timer", &timer_arg);
 
 

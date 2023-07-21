@@ -9,7 +9,7 @@
 
 #define TRIGGER_LOW_DELAY 4
 #define TRIGGER_HIGH_DELAY 10
-#define PING_TIMEOUT 3000000 // 3s
+#define PING_TIMEOUT 1000000//3000000 // 3s
 
 // Calc: 331.5+0.61*temperature[m/sec]
 // TODO change with temp sensor -> humidity
@@ -38,38 +38,21 @@ static inline uint32_t get_time_us()
     return tv.tv_usec;
 }
 
-
-
-typedef struct 
-{ 
-    gpio_num_t echo_pin;
-    side_t side;
-} isr_arg_t;
-
-static void IRAM_ATTR intr_handler(void* args)
+static void IRAM_ATTR intr_handler_left(void* args)
 {   
-    // Cast to arg
-    isr_arg_t* isr_arg = (isr_arg_t*)args;
+    event_t event = { gpio_get_level(*(gpio_num_t*)args), LEFT_SIDE };
+    xQueueSendFromISR(queue_handle, &event, NULL);
+}
 
-    // Check high
-    if (gpio_get_level(isr_arg->echo_pin))
-    {
-        event_t event = { EVENT_ULTRASONIC_SENSOR_ECHO_START, isr_arg->side };
-
-        // Send data to queue
-        xQueueSendFromISR(queue_handle, &event, NULL);  
-    }
-    else
-    {
-        event_t event = { EVENT_ULTRASONIC_SENSOR_ECHO_END, isr_arg->side };
-        
-        // Send data to queue
-        xQueueSendFromISR(queue_handle, &event, NULL);
-    }   
+static void IRAM_ATTR intr_handler_right(void* args)
+{
+    event_t event = { gpio_get_level(*(gpio_num_t*)args), RIGHT_SIDE };
+    xQueueSendFromISR(queue_handle, &event, NULL);
 }
 
 void interrupt_init(const ultrasonic_sensor_t* sensor)
 {
+    ESP_LOGI("intr_init", "START");
     // Interrupt is triggerd on rising or falling edge
     gpio_set_intr_type(sensor->echo_left, GPIO_INTR_ANYEDGE);
     gpio_set_intr_type(sensor->echo_right, GPIO_INTR_ANYEDGE);
@@ -83,20 +66,12 @@ void interrupt_init(const ultrasonic_sensor_t* sensor)
     // Allocate resources
     gpio_install_isr_service(0);
 
-    /*
-        Args:
-            -> echo pin
-            -> side (left or right)
-            -> queue
-    */
-    isr_arg_t isr_arg_left = { sensor->echo_left, LEFT_SIDE };
-    isr_arg_t isr_arg_right = { sensor->echo_right, RIGHT_SIDE };    
-
     // Add isr handlers
-    gpio_isr_handler_add(sensor->echo_left, intr_handler, (void*)&isr_arg_left);
-    gpio_isr_handler_add(sensor->echo_right, intr_handler, (void*)&isr_arg_right); // change to right
+    gpio_isr_handler_add(sensor->echo_left, intr_handler_left, (void*)&sensor->echo_left);
+    gpio_isr_handler_add(sensor->echo_right, intr_handler_right, (void*)&sensor->echo_right); // change to right
 
     //interrupt_disable(sensor);
+    ESP_LOGI("intr_init", "END");
 
     queue_handle = xQueueCreate(5, sizeof(event_t));
 }
@@ -155,7 +130,7 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
         if (xQueueReceive(queue_handle, &event, 0))
         {
             ESP_LOGI("measure", "xQueueReceive");
-            if (event.event_code == EVENT_ULTRASONIC_SENSOR_ECHO_START)
+            if (event.event_code == 1)
             {
                 ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_START");
                 uint32_t time_start = get_time_us();
@@ -164,7 +139,7 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
                 else
                     time_right_start = time_start;
             }
-            else if (event.event_code == EVENT_ULTRASONIC_SENSOR_ECHO_END)
+            else if (event.event_code == 0)
             {
                 ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_ECHO_END");
                 uint32_t time_end = get_time_us();
@@ -174,15 +149,14 @@ esp_err_t measure(esp_timer_handle_t* ping_timer, uint32_t* distance_left, uint3
                     time_right_end = time_end;
 
 
-                if (time_left_end != 0 && time_right_end != 0)
+                if (time_left_end != 0 && time_right_end != 0 && time_left_start != 0 && time_right_end != 0)
                 {
                     esp_timer_stop(*ping_timer);
 
                     break;
-
                 } 
             }
-            else if(event.event_code == EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT)
+            else if(event.event_code == 2)
             {
                 // timeout
                 ESP_LOGI("xQueueReceive", "EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT");
@@ -218,7 +192,8 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
 
 esp_err_t trigger(const ultrasonic_sensor_t* sensor)
 {
-    // Triggers of ultrasonic sensor 
+    // Triggers of ultrasonic sensor
+
     gpio_set_level(sensor->trigger, 0);
     esp_rom_delay_us(TRIGGER_LOW_DELAY);
     gpio_set_level(sensor->trigger, 1);               
