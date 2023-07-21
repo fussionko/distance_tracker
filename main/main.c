@@ -10,7 +10,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_system.h"
-
+#include "sys/time.h"
 #include "ultrasonic_sensor.h"
 
 // Temp values
@@ -54,7 +54,9 @@ void ultrasonic_read()
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     // Create ping timeout timer
     esp_timer_handle_t ping_timer;
-    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, 2 };
+        struct timeval tv;
+    gettimeofday(&tv, NULL);
+    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, 2, tv.tv_usec };
     create_timer(&ping_timer, timer_callback, "Ping timer", &timer_arg);
 
 
@@ -96,6 +98,9 @@ void ultrasonic_read()
         {
             printf("Distance LEFT: %"PRIu32" cm, %.02f m\n", distance_left, distance_left / 100.0);
             printf("Distance RIGHT: %"PRIu32" cm, %.02f m\n", distance_right, distance_right / 100.0); 
+
+            uint32_t formula = 
+
 
             cmdBuf.distance_left = distance_left;
             cmdBuf.distance_right = distance_right;
