@@ -9,7 +9,7 @@
 
 #define TRIGGER_LOW_DELAY 2
 #define TRIGGER_HIGH_DELAY 10
-#define PING_TIMEOUT 1000000//3000000 // 3s
+#define PING_TIMEOUT 500000// 0.5s 3000000 // 3s
 
 // Calc: 331.5+0.61*temperature[m/sec]
 // TODO change with temp sensor -> humidity

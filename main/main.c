@@ -12,6 +12,9 @@
 #include "esp_system.h"
 #include "sys/time.h"
 #include "ultrasonic_sensor.h"
+#include <string.h>
+#include <math.h>
+
 
 // Temp values
 #define GPIO_TRIGGER    4
@@ -96,11 +99,26 @@ void ultrasonic_read()
         }
         else
         {
-            printf("Distance LEFT: %"PRIu32" cm, %.02f m\n", distance_left, distance_left / 100.0);
-            printf("Distance RIGHT: %"PRIu32" cm, %.02f m\n", distance_right, distance_right / 100.0); 
 
-            uint32_t formula = 
+            float dis_left = (float)(distance_left);
+            float dis_right = (float)(distance_right);
+            printf("Distance LEFT: %"PRIu32" cm, %.02f, float %.4f m\n", distance_left, distance_left / 100.0, dis_left);
+            printf("Distance RIGHT: %"PRIu32" cm, %.02f, float %.4f m\n", distance_right, distance_right / 100.0, dis_right); 
 
+
+            // float f = dis_left * dis_left - dis_right * dis_right;
+            // float formula_x = -(f + 12.25)/7.0;
+            // float formula_y = sqrt(dis_left * dis_left - formula_x * formula_x);
+
+            // Improve with << and >> 
+            float dis_left2 = pow(dis_left, 2);
+            float dis_right2 = pow(dis_right, 2);
+
+            float formula_x = (dis_left2 - dis_right2) / 7.0f;
+            float formula_y = sqrt(dis_right2 - pow(1.75f - formula_x, 2));
+
+            printf("formula_x: %f\n", formula_x);
+            printf("formula_y: %f\n", formula_y);
 
             cmdBuf.distance_left = distance_left;
             cmdBuf.distance_right = distance_right;
@@ -108,7 +126,7 @@ void ultrasonic_read()
         }
         printf("-------------------------------\n");
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }    
 }
 
