@@ -25,6 +25,9 @@
 static const char* TAG = "Temperature sensor"; 
 static gpio_num_t sensor_gpio_pin;
 
+float temperature;
+float humidity;
+
 esp_err_t init_dht22(gpio_num_t pin)
 {
     ESP_RETURN_ON_ERROR(gpio_reset_pin(pin), TAG, "");
@@ -35,6 +38,9 @@ esp_err_t init_dht22(gpio_num_t pin)
     ESP_RETURN_ON_ERROR(gpio_pullup_dis(pin), TAG, "");
 
     sensor_gpio_pin = pin;
+
+    temperature = 0.0f;
+    humidity = 0.0f;
 
     return ESP_OK;
 }
