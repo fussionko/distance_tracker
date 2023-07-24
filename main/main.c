@@ -110,15 +110,22 @@ void ultrasonic_read()
             // float formula_x = -(f + 12.25)/7.0;
             // float formula_y = sqrt(dis_left * dis_left - formula_x * formula_x);
 
-            // Improve with << and >> 
-            float dis_left2 = pow(dis_left, 2);
-            float dis_right2 = pow(dis_right, 2);
+            if (fabs(dis_left - dis_right) > 3.5)
+                ESP_LOGI("ERROR", "wrong read");
+            else
+            {
+                // Improve with << and >> 
+                float dis_left2 = pow(dis_left, 2);
+                float dis_right2 = pow(dis_right, 2);
 
-            float formula_x = (dis_left2 - dis_right2) / 7.0f;
-            float formula_y = sqrt(dis_right2 - pow(1.75f - formula_x, 2));
+                float formula_x = (dis_left2 - dis_right2) / 7.0f;
+                float formula_y = sqrt(dis_right2 - pow(1.75f - formula_x, 2));
 
-            printf("formula_x: %f\n", formula_x);
-            printf("formula_y: %f\n", formula_y);
+                printf("formula_x: %f\n", formula_x);
+                printf("formula_y: %f\n", formula_y);
+            }
+
+
 
             cmdBuf.distance_left = distance_left;
             cmdBuf.distance_right = distance_right;
@@ -126,7 +133,7 @@ void ultrasonic_read()
         }
         printf("-------------------------------\n");
 
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }    
 }
 

@@ -13,6 +13,8 @@
         "istream": "c",
         "functional": "c",
         "numbers": "c",
-        "queue.h": "c"
-    }
+        "queue.h": "c",
+        "temperature_sensor.h": "c"
+    },
+    "idf.flashType": "UART"
 }

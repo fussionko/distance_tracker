@@ -1,2 +1,2 @@
-idf_component_register(SRCS "ultrasonic_sensor.c" "main.c"
+idf_component_register(SRCS "temperature_sensor.c" "ultrasonic_sensor.c" "main.c"
                     INCLUDE_DIRS ".")
