@@ -1,0 +1,134 @@
+#include "temperature_sensor.h"
+
+#include <stdio.h>
+// #include "esp_log.h"
+#include "esp_check.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_system.h"
+#include "rom/ets_sys.h"
+
+
+// All values are defined in microseconds [us]
+#define REQUEST_LOW_PULSE_DELAY     3000    // 1~10ms -> 1000~10000us  
+#define REQUEST_HIGH_PULSE_DELAY    25      // 20~40us   
+#define REQUEST_SENSOR_TIME_LOW     85      // >80us      
+#define REQUEST_SENSOR_TIME_HIGH    85      // >80us      
+#define SEND_START_DELAY            56      // >50us
+#define SEND_TIMEOUT_DELAY          75      // >70us     
+#define SEND_ONE_TIME               40      // >26~28us
+
+#define SEND_NUM_DATA_BITS      40  // 40 data bits
+#define SEND_MAX_DATA_ARRAY     5   // SEND_NUM_DATA_BITS / 8 (uint8_t array)   
+
+
+static const char* TAG = "Temperature sensor"; 
+static gpio_num_t sensor_gpio_pin;
+
+esp_err_t init_dht22(gpio_num_t pin)
+{
+    ESP_RETURN_ON_ERROR(gpio_reset_pin(pin), TAG, "");
+    ESP_RETURN_ON_ERROR(gpio_set_direction(pin, GPIO_MODE_INPUT), TAG, "");
+
+
+    ESP_RETURN_ON_ERROR(gpio_pulldown_dis(pin), TAG, "");
+    ESP_RETURN_ON_ERROR(gpio_pullup_dis(pin), TAG, "");
+
+    sensor_gpio_pin = pin;
+
+    return ESP_OK;
+}
+
+// Probably needs improvement (interrupts?)
+int get_signal_level_time(int time_out_us, bool state)
+{
+    int sec = 0;
+
+    while (gpio_get_level(sensor_gpio_pin) == state)
+    {
+        if (sec > time_out_us)
+            return -1;
+        ets_delay_us(1);
+    }
+
+    return sec;
+}
+
+/*----------------------------------------------------------------------------
+;
+;	read DHT22 sensor
+copy/paste from AM2302/DHT22 Docu:
+DATA: Hum = 16 bits, Temp = 16 Bits, check-sum = 8 Bits
+Example: MCU has received 40 bits data from AM2302 as
+0000 0010 1000 1100 0000 0001 0101 1111 1110 1110
+16 bits RH data + 16 bits T data + check sum
+1) we convert 16 bits RH data from binary system to decimal system, 0000 0010 1000 1100 → 652
+Binary system Decimal system: RH=652/10=65.2%RH
+2) we convert 16 bits T data from binary system to decimal system, 0000 0001 0101 1111 → 351
+Binary system Decimal system: T=351/10=35.1°C
+When highest bit of temperature is 1, it means the temperature is below 0 degree Celsius. 
+Example: 1000 0000 0110 0101, T= minus 10.1°C: 16 bits T data
+3) Check Sum=0000 0010+1000 1100+0000 0001+0101 1111=1110 1110 Check-sum=the last 8 bits of Sum=11101110
+Signal & Timings:
+The interval of whole process must be beyond 2 seconds.
+To request data from DHT:
+1) Sent low pulse for > 1~10 ms (MILI SEC)
+2) Sent high pulse for > 20~40 us (Micros).
+3) When DHT detects the start signal, it will pull low the bus 80us as response signal, 
+   then the DHT pulls up 80us for preparation to send data.
+4) When DHT is sending data to MCU, every bit's transmission begin with low-voltage-level that last 50us, 
+   the following high-voltage-level signal's length decide the bit is "1" or "0".
+	0: 26~28 us
+	1: 70 us
+;----------------------------------------------------------------------------*/
+
+//#define RETURN_ERROR_ON_TIMEOUT(time, timeout_us, state) ({time = get_signal_level_time(timeout_us, state);if (sec < 0){return DHT22_TIMEOUT_ERROR;}})
+
+int readDHT()
+{
+    uint8_t data[SEND_MAX_DATA_ARRAY];
+    // Maybe use i in for loop to calculate indices
+    uint8_t byteIndex = 0, bitIndex = 7;
+
+    // Change gpio direction to output
+    gpio_set_direction(sensor_gpio_pin, GPIO_MODE_OUTPUT);
+
+    // Send signal to DHT22 sensor
+    gpio_set_level(sensor_gpio_pin, GPIO_OUTPUT_LOW);
+    ets_delay_us(REQUEST_LOW_PULSE_DELAY);
+
+    gpio_set_level(sensor_gpio_pin, GPIO_OUTPUT_HIGH);
+    ets_delay_us(REQUEST_HIGH_PULSE_DELAY);
+
+    // Change gpio direction to input
+    gpio_set_direction(sensor_gpio_pin, GPIO_MODE_INPUT);
+
+    // DHT22 keeps line low for 80us and then high for 80us
+    // if line doesn't change in that timeframe return error
+
+    int sec = 0;
+    sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, 0);
+    if (sec < 0) return DHT22_TIMEOUT_ERROR;
+
+    sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, 0);
+    if (sec < 0) return DHT22_TIMEOUT_ERROR;
+
+    // No errors -> DHT22 sends data
+    for (int i = 0; i < SEND_NUM_DATA_BITS; ++i)
+    {
+        // Starts with 50us low voltage
+        sec = get_signal_level_time(SEND_START_DELAY, 0);
+        if (sec < 0) return DHT22_TIMEOUT_ERROR;
+
+        // Check if signal is still high after 70us -> 1 else 0
+        sec = get_signal_level_time(SEND_TIMEOUT_DELAY, 1);
+        if (sec < 0) return DHT22_TIMEOUT_ERROR;
+
+        // If sec > 26~28us -> 1 else 0
+        if (sec > SEND_ONE_TIME)
+        {
+            data[]
+        }
+    }
+
+}
