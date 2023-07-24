@@ -16,6 +16,8 @@
 #include <math.h>
 
 
+#include "temperature_sensor.h"
+
 // Temp values
 #define GPIO_TRIGGER    4
 #define GPIO_ECHO_LEFT  15
@@ -137,11 +139,28 @@ void ultrasonic_read()
     }    
 }
 
+void DHT_read_task(void* pvParams)
+{
+    init_dht22(GPIO_NUM_33);
+    while(1) {
+	
+		printf("DHT Sensor Readings\n" );
+		int ret = read_dht22();
+
+		printf("Humidity %.2f %%\n", get_humidity());
+		printf("Temperature %.2f degC\n\n", get_temperature());
+        printf("Err: %d\n", ret);
+		
+		vTaskDelay(2000 / portTICK_PERIOD_MS);
+	}
+}
+
 void app_main(void)
 {
 	/* Create Queue */
 	xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
 	configASSERT(xQueueCmd);
 
-    xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
+    //xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
+    xTaskCreate(&DHT_read_task, "DHT_reader_task", 2048, NULL, 5, NULL);
 }

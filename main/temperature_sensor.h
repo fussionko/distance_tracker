@@ -21,5 +21,10 @@
 
 esp_err_t init_dht22(gpio_num_t pin);
 
+int read_dht22();
+
+float get_humidity();
+float get_temperature();
+
 
 #endif // _TEMPERATURE_SENSOR__

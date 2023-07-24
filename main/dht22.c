@@ -45,6 +45,18 @@ esp_err_t init_dht22(gpio_num_t pin)
     return ESP_OK;
 }
 
+
+float get_humidity()
+{
+    return humidity;
+}
+
+float get_temperature()
+{
+    return temperature;
+}
+
+
 // Probably needs improvement (interrupts?)
 int get_signal_level_time(int time_out_us, bool state)
 {
@@ -90,9 +102,9 @@ To request data from DHT:
 
 //#define RETURN_ERROR_ON_TIMEOUT(time, timeout_us, state) ({time = get_signal_level_time(timeout_us, state);if (sec < 0){return DHT22_TIMEOUT_ERROR;}})
 
-int readDHT()
+int read_dht22()
 {
-    uint8_t data[SEND_MAX_DATA_ARRAY];
+    uint8_t data[SEND_MAX_DATA_ARRAY] = { 0 };
     // Maybe use i in for loop to calculate indices
     uint8_t byteIndex = 0, bitIndex = 7;
 
@@ -150,6 +162,7 @@ int readDHT()
     // Verify checksum
     // & 0xff is because you need only 8 bits and overflow is ignored
     // all uint8_t types are promoted to int thats why there can be more than 8 bits stored
+    ESP_LOGI(TAG, "%d, %d, %d, %d, %d", data[4], data[0], data[1], data[2], data[3]);
     if (data[4] != (data[0] + data[1] + data[2] + data[3]) && 0xff)
         return DHT22_CHECKSUM_ERROR;
 
