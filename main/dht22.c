@@ -171,8 +171,8 @@ int read_dht22()
     // Set humidity from data[0] and data[1]
     humidity = (float)(((uint16_t)data[0] << 8) | data[1]) / 10.0f; 
 
-    // Set temperature from data[2] and data[3] but ignore first bit in data[2](<< 9 deletes first bit)
-    temperature = (float)(((uint16_t)data[2] << 9) | data[3]) / 10.0f; 
+    // Set temperature from data[2] and data[3] but ignore first bit in data[2]( & 0x7f set first bit to 0)
+    temperature = (float)((((uint16_t)data[2] << 8) & 0x7f) | data[3]) / 10.0f; 
 
     // Check first bit in temperature for negative value and change sign
     if (data[2] & 0x80)
