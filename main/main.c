@@ -160,7 +160,7 @@ void app_main(void)
 	/* Create Queue */
 	xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
 	configASSERT(xQueueCmd);
-
+      
     //xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
     xTaskCreate(&DHT_read_task, "DHT_reader_task", 2048, NULL, 5, NULL);
 }
