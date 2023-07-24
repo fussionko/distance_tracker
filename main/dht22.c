@@ -123,12 +123,29 @@ int readDHT()
         // Check if signal is still high after 70us -> 1 else 0
         sec = get_signal_level_time(SEND_TIMEOUT_DELAY, 1);
         if (sec < 0) return DHT22_TIMEOUT_ERROR;
+        
+        // Data bits flows from left to right
 
         // If sec > 26~28us -> 1 else 0
         if (sec > SEND_ONE_TIME)
         {
-            data[]
+            data[byteIndex] |= (1 << bitIndex);
         }
+
+        // If full move to next byte
+        if (bitIndex == 0) 
+        {
+            bitIndex = 7;
+            ++byteIndex;
+        }
+        else --bitIndex;
     }
 
+    // Verify checksum
+    // & 0xff is because you need only 8 bits and overflow is ignored
+    // all uint8_t types are promoted to int thats why there can be more than 8 bits stored
+    if (data[4] == (data[0] + data[1] + data[2] + data[3]) && 0xff)
+        return DHT22_OK;
+
+    return DHT22_CHECKSUM_ERROR;
 }
