@@ -66,6 +66,7 @@ int get_signal_level_time(int time_out_us, bool state)
     {
         if (sec > time_out_us)
             return -1;
+        ++sec;
         ets_delay_us(1);
     }
 
