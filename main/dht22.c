@@ -25,8 +25,8 @@
 static const char* TAG = "Temperature sensor"; 
 static gpio_num_t sensor_gpio_pin;
 
-float temperature;
-float humidity;
+float temperature;  // [%]
+float humidity;     // [C]
 
 esp_err_t init_dht22(gpio_num_t pin)
 {
@@ -150,8 +150,18 @@ int readDHT()
     // Verify checksum
     // & 0xff is because you need only 8 bits and overflow is ignored
     // all uint8_t types are promoted to int thats why there can be more than 8 bits stored
-    if (data[4] == (data[0] + data[1] + data[2] + data[3]) && 0xff)
-        return DHT22_OK;
+    if (data[4] != (data[0] + data[1] + data[2] + data[3]) && 0xff)
+        return DHT22_CHECKSUM_ERROR;
 
-    return DHT22_CHECKSUM_ERROR;
+    // Set humidity from data[0] and data[1]
+    humidity = (float)(((uint16_t)data[0] << 8) | data[1]) / 10.0f; 
+
+    // Set temperature from data[2] and data[3] but ignore first bit in data[2](<< 9 deletes first bit)
+    temperature = (float)(((uint16_t)data[2] << 9) | data[3]) / 10.0f; 
+
+    // Check first bit in temperature for negative value and change sign
+    if (data[2] & 0x80)
+        temperature *= -1;
+
+    return DHT22_OK;
 }
