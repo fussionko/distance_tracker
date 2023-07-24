@@ -5,6 +5,7 @@
 
 #include "driver/gpio.h"
 
+// Define gpio high and low
 #ifndef GPIO_OUTPUT_HIGH
 #define GPIO_OUTPUT_HIGH 1
 #endif // GPIO_OUTPUT_HIGH

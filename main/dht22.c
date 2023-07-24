@@ -8,7 +8,6 @@
 #include "esp_system.h"
 #include "rom/ets_sys.h"
 
-
 // All values are defined in microseconds [us]
 #define REQUEST_LOW_PULSE_DELAY     3000    // 1~10ms -> 1000~10000us  
 #define REQUEST_HIGH_PULSE_DELAY    25      // 20~40us   
@@ -22,7 +21,7 @@
 #define SEND_MAX_DATA_ARRAY     5   // SEND_NUM_DATA_BITS / 8 (uint8_t array)   
 
 
-static const char* TAG = "Temperature sensor"; 
+static const char* TAG = "Temperature sensor DHT22"; 
 static gpio_num_t sensor_gpio_pin;
 
 float temperature;  // [%]
