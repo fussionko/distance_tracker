@@ -13,15 +13,13 @@
 #define GPIO_OUTPUT_LOW 0
 #endif // GPIO_OUTPUT_LOW
 
-// DHT22
-// Error codes need to be changed to positive numbers
-#define DHT22_OK                0
-#define DHT22_CHECKSUM_ERROR    -1
-#define DHT22_TIMEOUT_ERROR     -2
+
+// DHT22 error codes
+typedef enum dht22_error { DHT22_OK = 0, DHT22_CHECKSUM_ERROR = 1, DHT22_TIMEOUT_ERROR = 2 } dht22_error;
 
 esp_err_t init_dht22(gpio_num_t pin);
 
-int read_dht22();
+dht22_error read_dht22();
 
 float get_humidity();
 float get_temperature();
