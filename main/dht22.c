@@ -104,7 +104,7 @@ To request data from DHT:
 
 //#define RETURN_ERROR_ON_TIMEOUT(time, timeout_us, state) ({time = get_signal_level_time(timeout_us, state);if (sec < 0){return DHT22_TIMEOUT_ERROR;}})
 
-int read_dht22()
+dht22_error read_dht22()
 {
     uint8_t data[SEND_MAX_DATA_ARRAY] = { 0 };
     // Maybe use i in for loop to calculate indices
