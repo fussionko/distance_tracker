@@ -66,6 +66,7 @@ int get_signal_level_time(int time_out_us, bool state)
     {
         if (sec > time_out_us)
             return -1;
+            
         ++sec;
         ets_delay_us(1);
     }
@@ -126,21 +127,21 @@ int read_dht22()
     // if line doesn't change in that timeframe return error
 
     int sec = 0;
-    sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, 0);
+    sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, GPIO_OUTPUT_LOW);
     if (sec < 0) return DHT22_TIMEOUT_ERROR;
 
-    sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, 0);
+    sec = get_signal_level_time(REQUEST_SENSOR_TIME_HIGH, GPIO_OUTPUT_HIGH);
     if (sec < 0) return DHT22_TIMEOUT_ERROR;
 
     // No errors -> DHT22 sends data
     for (int i = 0; i < SEND_NUM_DATA_BITS; ++i)
     {
         // Starts with 50us low voltage
-        sec = get_signal_level_time(SEND_START_DELAY, 0);
+        sec = get_signal_level_time(SEND_START_DELAY, GPIO_OUTPUT_LOW);
         if (sec < 0) return DHT22_TIMEOUT_ERROR;
 
         // Check if signal is still high after 70us -> 1 else 0
-        sec = get_signal_level_time(SEND_TIMEOUT_DELAY, 1);
+        sec = get_signal_level_time(SEND_TIMEOUT_DELAY, GPIO_OUTPUT_HIGH);
         if (sec < 0) return DHT22_TIMEOUT_ERROR;
         
         // Data bits flows from left to right
