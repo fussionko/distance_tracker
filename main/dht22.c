@@ -1,7 +1,7 @@
 #include "temperature_sensor.h"
 
 #include <stdio.h>
-// #include "esp_log.h"
+#include "esp_log.h"
 #include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -109,6 +109,8 @@ dht22_error read_dht22()
     // Maybe use i in for loop to calculate indices
     uint8_t byteIndex = 0, bitIndex = 7;
 
+    taskDISABLE_INTERRUPTS();
+
     // Change gpio direction to output
     gpio_set_direction(sensor_gpio_pin, GPIO_MODE_OUTPUT);
 
@@ -159,6 +161,8 @@ dht22_error read_dht22()
         }
         else --bitIndex;
     }
+
+    taskENABLE_INTERRUPTS();
 
     // Verify checksum
     // & 0xff is because you need only 8 bits and overflow is ignored

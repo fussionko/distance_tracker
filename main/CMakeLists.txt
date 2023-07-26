@@ -1,2 +1,2 @@
-idf_component_register(SRCS "dht22.c" "ultrasonic_sensor.c" "main.c"
+idf_component_register(SRCS "hc_sr04_2rx.c" "dht22.c" "main.c"
                     INCLUDE_DIRS ".")
