@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
+#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -12,75 +14,55 @@
 #include "esp_system.h"
 #include "sys/time.h"
 #include "ultrasonic_sensor.h"
-#include <string.h>
-#include <math.h>
+
 
 
 #include "temperature_sensor.h"
 
-// Temp values
+// GPIO pins
 #define GPIO_TRIGGER    4
 #define GPIO_ECHO_LEFT  15
 #define GPIO_ECHO_RIGHT 2
 
-// CMD codes
-#define CMD_START   100 
-#define CMD_STOP    200 
-#define CMD_MEASURE 300
-#define CMD_CLEAR   400
+#define READ_ULTRASONIC_MS 2000 // read [ms]
+#define UPDATE_SOUND_SPEED 8000000 // update speed of sound at that interval in [us]
 
-QueueHandle_t xQueueCmd;
+#define DISTANCE_TX_RX_M 0.0185f // distance from transmittor to reciever [m]
 
-// CMD structure
-typedef struct 
-{
-    uint16_t command;
-    uint32_t distance_left, distance_right;
-    TaskHandle_t taskHandle;
-} CMD_t;
+
+static const char* TAG = "Main script";
 
 void ultrasonic_read()
 {
     ESP_LOGI(pcTaskGetName(0), "Start");
-    CMD_t cmdBuf;
-    cmdBuf.command = CMD_MEASURE;
-    cmdBuf.taskHandle = xTaskGetCurrentTaskHandle();
-
     ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO_LEFT, GPIO_ECHO_RIGHT };
 
     ultrasonic_sensor_init(&ultrasonic_sensor);
 
 
     interrupt_init(&ultrasonic_sensor);
-   // interrupt_enable(&ultrasonic_sensor);
 
-    
 
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
     // Create ping timeout timer
     esp_timer_handle_t ping_timer;
-        struct timeval tv;
-    gettimeofday(&tv, NULL);
-    event_t timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, 2, tv.tv_usec };
+    
     create_timer(&ping_timer, timer_callback, "Ping timer", &timer_arg);
 
 
+    read_dht22();
+
+    set_sound_speed(get_temperature(), get_humidity());
+
     // Infinite loop -> prob change in future to certain amount of repetition
-    ESP_LOGI("loop", "START");
+    ESP_LOGI(TAG, "Start main loop");
     while(true)
     {
-        ESP_LOGI("trigger", "START");
-        trigger(&ultrasonic_sensor);
-
-        uint32_t distance_left, distance_right;
-        ESP_LOGI("measure", "START");
-        esp_err_t res = measure(&ping_timer, &distance_left, &distance_right);
-
-        // 
-        // esp_err_t res = ultrasonic_measure_cm(&ultrasonic_sensor, &distance_left, &distance_right);
+        float distance_left, distance_right;
+        ESP_LOGI(TAG, "Start measure");
+        esp_err_t res = measure(&ultrasonic_sensor, &ping_timer, &distance_left, &distance_right);
 
         // Handle error
-        ESP_LOGI("handle_error", "START");
+        ESP_LOGI(TAG, "Start error handle");
         if (res != ESP_OK)
         {
             printf("Error: ");
@@ -101,66 +83,67 @@ void ultrasonic_read()
         }
         else
         {
+            // [m/s]
+            printf("Distance LEFT: %.05f cm\n", distance_left * 100);
+            printf("Distance RIGHT: %.05f cm\n", distance_right * 100); 
 
-            float dis_left = (float)(distance_left);
-            float dis_right = (float)(distance_right);
-            printf("Distance LEFT: %"PRIu32" cm, %.02f, float %.4f m\n", distance_left, distance_left / 100.0, dis_left);
-            printf("Distance RIGHT: %"PRIu32" cm, %.02f, float %.4f m\n", distance_right, distance_right / 100.0, dis_right); 
-
-
-            // float f = dis_left * dis_left - dis_right * dis_right;
-            // float formula_x = -(f + 12.25)/7.0;
-            // float formula_y = sqrt(dis_left * dis_left - formula_x * formula_x);
-
-            if (fabs(dis_left - dis_right) > 3.5)
-                ESP_LOGI("ERROR", "wrong read");
+            if (fabs(distance_left - distance_right) > (DISTANCE_TX_RX_M * 2))
+                ESP_LOGW(TAG, "ERROR wrong read");
             else
             {
-                // Improve with << and >> 
-                float dis_left2 = pow(dis_left, 2);
-                float dis_right2 = pow(dis_right, 2);
+                float dis_left2 = pow(distance_left, 2);
+                float dis_right2 = pow(distance_right, 2);
 
-                float formula_x = (dis_left2 - dis_right2) / 7.0f;
-                float formula_y = sqrt(dis_right2 - pow(1.75f - formula_x, 2));
+                float formula_x = (dis_left2 - dis_right2) / (DISTANCE_TX_RX_M * 4);
+                float formula_y = sqrt(dis_right2 - pow(DISTANCE_TX_RX_M - formula_x, 2));
 
-                printf("formula_x: %f\n", formula_x);
-                printf("formula_y: %f\n", formula_y);
+                if (pow(DISTANCE_TX_RX_M - formula_x, 2) < 0)
+                    ESP_LOGW(TAG, "ERROR wrong read");
+                else
+                {
+                    printf("formula_x: %f\n", formula_x);
+                    printf("formula_y: %f\n", formula_y);
+
+                    printf("data: %f %f\n", dis_left2, dis_right2);
+                }
+  
             }
-
-
-
-            cmdBuf.distance_left = distance_left;
-            cmdBuf.distance_right = distance_right;
-            xQueueSend(xQueueCmd, &cmdBuf, 0);
         }
         printf("-------------------------------\n");
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelay(READ_ULTRASONIC_MS / portTICK_PERIOD_MS);
     }    
 }
 
-void DHT_read_task(void* pvParams)
+void update_sound_speed()
 {
-    init_dht22(GPIO_NUM_33);
-    while(1) {
-	
-		printf("DHT Sensor Readings\n" );
-		int ret = read_dht22();
-
-		printf("Humidity %.2f %%\n", get_humidity());
-		printf("Temperature %.2f degC\n\n", get_temperature());
-        printf("Err: %d\n", ret);
-		
-		vTaskDelay(2000 / portTICK_PERIOD_MS);
-	}
+	printf("DHT Sensor Readings\n" );
+	int ret = read_dht22();
+	printf("Humidity %.2f %%\n", get_humidity());
+	printf("Temperature %.2f degC\n", get_temperature());
+    printf("Err: %d\n", ret);
 }
 
 void app_main(void)
 {
 	/* Create Queue */
-	xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
-	configASSERT(xQueueCmd);
+	// xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
+	// configASSERT(xQueueCmd);
       
-    //xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
-    xTaskCreate(&DHT_read_task, "DHT_reader_task", 2048, NULL, 5, NULL);
+
+    // Setup timer
+    const esp_timer_create_args_t timer_args = 
+    {
+        .callback = &update_sound_speed,
+        .name = "Update sound speed",
+    };
+
+    esp_timer_handle_t t_handle;
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &t_handle));
+    init_dht22(GPIO_NUM_33);
+    esp_timer_start_periodic(t_handle, UPDATE_SOUND_SPEED);
+
+    
+    xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
+    //xTaskCreate(&DHT_read_task, "DHT_reader_task", 2048, NULL, 5, NULL);
 }
