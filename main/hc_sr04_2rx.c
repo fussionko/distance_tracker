@@ -1,5 +1,7 @@
 #include "ultrasonic_sensor.h"
 
+#include <math.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -14,7 +16,7 @@
 
 #define TRIGGER_LOW_DELAY   2       // low delay [us]
 #define TRIGGER_HIGH_DELAY  10      // high delay [us]
-#define PING_TIMEOUT        500000  // ping timeout [us]
+#define PING_TIMEOUT_TIME        500000  // ping timeout [us]
 
 
 
@@ -23,31 +25,37 @@
 
 static const char* TAG = "HC-SR04";
 
-static float soundSpeed; // [m/s]
+static float soundSpeed;        // [m/s]
+static uint64_t echoReplyTimeout;  // [us]
 
 // Ping timeout timer handle
 static esp_timer_handle_t ping_timeout_timer_handle;
 
 // Echo timeout timer handels
-static esp_time_handle_t echo_timeout_timer_left_handle;
-static esp_time_handle_t echo_timeout_timer_right_handle;
+static esp_timer_handle_t echo_timeout_timer_left_handle;
+static esp_timer_handle_t echo_timeout_timer_right_handle;
 
 QueueHandle_t queueEventData;
 
 void set_sound_speed(float temperature, float humidity)
 {
+    // Calculate speed of sound
     soundSpeed = 331.3 + 0.6 * temperature;
+
+    // Calculate max echo reply timeout
+    // t = MAX_DISTANCE / soundSpeed * 10^6;
+    echoReplyTimeout = (uint64_t)round(MAX_DISTANCE / soundSpeed) * 1e6;
 }
 
 static void IRAM_ATTR intr_handler_left(void* args)
 {   
-    event_t event = { gpio_get_level(*(gpio_num_t*)args), LEFT_SIDE, esp_timer_get_time() };
+    event_t event = { (event_code_t)gpio_get_level(*(gpio_num_t*)args), LEFT_SIDE, esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
 
 static void IRAM_ATTR intr_handler_right(void* args)
 {
-    event_t event = { gpio_get_level(*(gpio_num_t*)args), RIGHT_SIDE, esp_timer_get_time() };
+    event_t event = { (event_code_t)gpio_get_level(*(gpio_num_t*)args), RIGHT_SIDE, esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
 
@@ -109,26 +117,43 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
         if (xQueueReceive(queueEventData, &event, 0))
         {
             ESP_LOGI(TAG, "queue recieved event");
-            if (event.event_code == 1)
+
+            if (event.event_code == ECHO_START)
             {    
                 time[event.side][START] = event.time;      
 
+                // Start echo timeout timer
+                // Maybe change to array [2] won't need to use if statment
+                esp_timer_start_once(event.side == LEFT_SIDE ? echo_timeout_timer_left_handle : echo_timeout_timer_right_handle, echoReplyTimeout);
             }
-            else if (event.event_code == 0)
+            else if (event.event_code == ECHO_END)
             {
                 time[event.side][END] = event.time;
 
-                if (time[LEFT_SIDE][START] != 0 && time[RIGHT_SIDE][START] != 0 && time[LEFT_SIDE][1] != 0 && time[RIGHT_SIDE][END] != 0)
-                {
-                    esp_timer_stop(ping_timeout_timer_handle);
+                esp_timer_stop(ping_timeout_timer_handle);
+                // if (time[LEFT_SIDE][START] != 0 && time[RIGHT_SIDE][START] != 0 && time[LEFT_SIDE][1] != 0 && time[RIGHT_SIDE][END] != 0)
+                // {
+                //     esp_timer_stop(ping_timeout_timer_handle);
 
-                    break;
-                } 
+                //     break;
+                // } 
             }
-            else if(event.event_code == 2)
+            else if(event.event_code == PING_TIMEOUT)
             {
                 // timeout
+                if (esp_timer_is_active(echo_timeout_timer_left_handle)) esp_timer_stop(echo_timeout_timer_left_handle);
+                if (esp_timer_is_active(echo_timeout_timer_right_handle)) esp_timer_stop(echo_timeout_timer_right_handle);
+
                 return ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT;
+            }
+            else if(event.event_code == ECHO_TIMEOUT)
+            {
+                if (esp_timer_is_active(echo_timeout_timer_left_handle)) esp_timer_stop(echo_timeout_timer_left_handle);
+                if (esp_timer_is_active(echo_timeout_timer_right_handle)) esp_timer_stop(echo_timeout_timer_right_handle);
+
+                if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
+
+                return ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT;    
             }
         }
     }
@@ -181,7 +206,7 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     queueEventData = xQueueCreate(4, sizeof(event_t));
 
     // Create main ping timeout timer
-    event_t ping_timeout_timer_arg = { EVENT_ULTRASONIC_SENSOR_PING_TIMEOUT, 2, esp_timer_get_time() };
+    event_t ping_timeout_timer_arg = { PING_TIMEOUT, 2, esp_timer_get_time() };
     const esp_timer_create_args_t ping_timeout_timer_args = 
     {
         .callback = &timeout_timer_callback,
@@ -191,13 +216,14 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     ESP_ERROR_CHECK(esp_timer_create(&ping_timeout_timer_args, ping_timeout_timer_handle));
 
     // Create 2 timeout timers for each echo reply
-    event_t echo_timeout_timer_arg = { ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT, 2, esp_timer_get_time() };
+    event_t echo_timeout_timer_arg = { ECHO_TIMEOUT, 3, esp_timer_get_time() };
     const esp_timer_create_args_t echo_timeout_timer_args = 
     {
         .callback = &timeout_timer_callback,
         .name = "Echo timeout timer",
         .arg = (void*)&echo_timeout_timer_arg
     };
+
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, echo_timeout_timer_left_handle));
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, echo_timeout_timer_right_handle));
 

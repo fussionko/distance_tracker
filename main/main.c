@@ -24,6 +24,8 @@
 #define GPIO_ECHO_LEFT  15
 #define GPIO_ECHO_RIGHT 2
 
+#define DHT22_SENSOR 33
+
 #define READ_ULTRASONIC_MS 2000 // read [ms]
 #define UPDATE_SOUND_SPEED 8000000 // update speed of sound at that interval in [us]
 
@@ -32,26 +34,28 @@
 
 static const char* TAG = "Main script";
 
+void update_sound_speed()
+{
+	ESP_LOGI(TAG, "update sound speed");
+	int ret = read_dht22();
+	if (ret == 0)
+    {
+        set_sound_speed(get_temperature(), get_humidity());
+    }
+    else
+    {
+        ESP_LOGE(TAG, "ERROR update sound speed %d\n", ret);
+    }
+}
+
 void ultrasonic_read()
 {
-    ESP_LOGI(pcTaskGetName(0), "Start");
+    ESP_LOGI(TAG, "Start");
+
     ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO_LEFT, GPIO_ECHO_RIGHT };
 
+    // Init ultrasonic sensor
     ultrasonic_sensor_init(&ultrasonic_sensor);
-
-
-    interrupt_init(&ultrasonic_sensor);
-
-
-    // Create ping timeout timer
-    esp_timer_handle_t ping_timer;
-    
-    create_timer(&ping_timer, timer_callback, "Ping timer", &timer_arg);
-
-
-    read_dht22();
-
-    set_sound_speed(get_temperature(), get_humidity());
 
     // Infinite loop -> prob change in future to certain amount of repetition
     ESP_LOGI(TAG, "Start main loop");
@@ -59,7 +63,7 @@ void ultrasonic_read()
     {
         float distance_left, distance_right;
         ESP_LOGI(TAG, "Start measure");
-        esp_err_t res = measure(&ultrasonic_sensor, &ping_timer, &distance_left, &distance_right);
+        esp_err_t res = measure(&ultrasonic_sensor, &distance_left, &distance_right);
 
         // Handle error
         ESP_LOGI(TAG, "Start error handle");
@@ -115,35 +119,24 @@ void ultrasonic_read()
     }    
 }
 
-void update_sound_speed()
-{
-	printf("DHT Sensor Readings\n" );
-	int ret = read_dht22();
-	printf("Humidity %.2f %%\n", get_humidity());
-	printf("Temperature %.2f degC\n", get_temperature());
-    printf("Err: %d\n", ret);
-}
+
 
 void app_main(void)
 {
-	/* Create Queue */
-	// xQueueCmd = xQueueCreate(10, sizeof(CMD_t));
-	// configASSERT(xQueueCmd);
-      
-
     // Setup timer
-    const esp_timer_create_args_t timer_args = 
+    const esp_timer_create_args_t update_temp_timer_args = 
     {
         .callback = &update_sound_speed,
         .name = "Update sound speed",
     };
 
-    esp_timer_handle_t t_handle;
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &t_handle));
-    init_dht22(GPIO_NUM_33);
-    esp_timer_start_periodic(t_handle, UPDATE_SOUND_SPEED);
+    esp_timer_handle_t update_temp_timer_handle;
+    ESP_ERROR_CHECK(esp_timer_create(&update_temp_timer_args, &update_temp_timer_handle));
+
+    // Init dht22 sensor
+    init_dht22(DHT22_SENSOR);
+    esp_timer_start_periodic(update_temp_timer_handle, UPDATE_SOUND_SPEED);
 
     
-    xTaskCreate(&ultrasonic_read, "ultrasonic read", 1024*2, NULL, 2, NULL);
-    //xTaskCreate(&DHT_read_task, "DHT_reader_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 2048, NULL, 2, NULL);
 }
