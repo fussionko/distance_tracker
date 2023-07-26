@@ -27,7 +27,7 @@
 #define DHT22_SENSOR 33
 
 #define READ_ULTRASONIC_MS 2000 // read [ms]
-#define UPDATE_SOUND_SPEED 8000000 // update speed of sound at that interval in [us]
+#define UPDATE_SOUND_SPEED 5000000 // update speed of sound at that interval in [us]
 
 #define DISTANCE_TX_RX_M 0.0185f // distance from transmittor to reciever [m]
 
@@ -62,6 +62,7 @@ void ultrasonic_read()
     while(true)
     {
         float distance_left, distance_right;
+
         ESP_LOGI(TAG, "Start measure");
         esp_err_t res = measure(&ultrasonic_sensor, &distance_left, &distance_right);
 
@@ -135,8 +136,9 @@ void app_main(void)
 
     // Init dht22 sensor
     init_dht22(DHT22_SENSOR);
+    update_sound_speed();
     esp_timer_start_periodic(update_temp_timer_handle, UPDATE_SOUND_SPEED);
 
     
-    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 2048, NULL, 2, NULL);
+    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
 }
