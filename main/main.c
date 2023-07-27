@@ -36,7 +36,7 @@ static const char* TAG = "Main script";
 
 void update_sound_speed()
 {
-	ESP_LOGI(TAG, "update sound speed");
+	// ESP_LOGI(TAG, "update sound speed");
 	int ret = read_dht22();
 	if (ret == 0)
     {
@@ -44,7 +44,7 @@ void update_sound_speed()
     }
     else
     {
-        ESP_LOGE(TAG, "ERROR update sound speed %d\n", ret);
+        ESP_LOGE(TAG, "ERROR update sound speed %d -> name: %s\n", ret, dht22_error_names[ret]);
     }
 }
 
@@ -63,11 +63,11 @@ void ultrasonic_read()
     {
         float distance_left, distance_right;
 
-        ESP_LOGI(TAG, "Start measure");
+        // ESP_LOGI(TAG, "Start measure");
         esp_err_t res = measure(&ultrasonic_sensor, &distance_left, &distance_right);
 
         // Handle error
-        ESP_LOGI(TAG, "Start error handle");
+        // ESP_LOGI(TAG, "Start error handle");
         if (res != ESP_OK)
         {
             printf("Error: ");
@@ -89,11 +89,12 @@ void ultrasonic_read()
         else
         {
             // [m/s]
-            printf("Distance LEFT: %.05f cm\n", distance_left * 100);
-            printf("Distance RIGHT: %.05f cm\n", distance_right * 100); 
+            // printf("Distance LEFT: %.05f cm\n", distance_left * 100);
+            // printf("Distance RIGHT: %.05f cm\n", distance_right * 100); 
 
             if (fabs(distance_left - distance_right) > (DISTANCE_TX_RX_M * 2))
-                ESP_LOGW(TAG, "ERROR wrong read");
+                //ESP_LOGW(TAG, "ERROR wrong read");
+                continue;
             else
             {
                 float dis_left2 = pow(distance_left, 2);
@@ -103,13 +104,12 @@ void ultrasonic_read()
                 float formula_y = sqrt(dis_right2 - pow(DISTANCE_TX_RX_M - formula_x, 2));
 
                 if (pow(DISTANCE_TX_RX_M - formula_x, 2) < 0)
-                    ESP_LOGW(TAG, "ERROR wrong read");
+                    //ESP_LOGW(TAG, "ERROR wrong read");
+                    continue;
                 else
                 {
-                    printf("formula_x: %f\n", formula_x);
-                    printf("formula_y: %f\n", formula_y);
-
-                    printf("data: %f %f\n", dis_left2, dis_right2);
+                    printf("formula_x: %0.3f\n", formula_x * 100);
+                    printf("formula_y: %0.3f\n", formula_y * 100);
                 }
   
             }

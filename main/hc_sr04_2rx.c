@@ -16,7 +16,7 @@
 
 #define TRIGGER_LOW_DELAY   2       // low delay [us]
 #define TRIGGER_HIGH_DELAY  10      // high delay [us]
-#define PING_TIMEOUT_TIME   50000   // ping timeout [us]
+#define PING_TIMEOUT_TIME   100   // ping timeout [us]
 
 
 
@@ -38,7 +38,7 @@ QueueHandle_t queueEventData;
 
 void set_sound_speed(float temperature, float humidity)
 {
-    ESP_LOGI(TAG, "Set sound speed");
+    // ESP_LOGI(TAG, "Set sound speed");
     // Calculate speed of sound
     soundSpeed = 331.3 + 0.6 * temperature;
 
@@ -77,8 +77,8 @@ esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
 
 void timeout_timer_callback(void* args)
 {
-    // ESP_EARLY_LOGI(TAG, "timer callback");
-    xQueueSendToFrontFromISR(queueEventData, args, NULL);
+    event_t event = { *(event_code_t*)args, SIDE_NONE, esp_timer_get_time() };
+    xQueueSendFromISR(queueEventData, &event, NULL);
 }
 
 
@@ -101,11 +101,11 @@ esp_err_t trigger(const ultrasonic_sensor_t* sensor)
 
 esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float* distance_right)
 {
-    ESP_LOGI(TAG, "Start measure");
+    // ESP_LOGI(TAG, "Start measure");
 
   
 
-
+    
 
     event_t event;
 
@@ -119,12 +119,13 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
     trigger(sensor);
     interrupt_enable(sensor);
 
-    ESP_LOGI(TAG, "Start measure");
+    // ESP_LOGI(TAG, "Start measure");
     while(1)
     {
         // Check if event was added to queue
         if (xQueueReceive(queueEventData, &event, 0))
         {
+            // taskENTER_CRITICAL();
             ESP_LOGI(TAG, "queue recieved event code: %d,  side: %d", (int)event.event_code, event.side);
 
             if (event.event_code == ECHO_START)
@@ -141,6 +142,10 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
                     } 
 
                     interrupt_disable(sensor);
+
+                    // Kill ping timer if active
+                    if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
+                    // taskEXIT_CRITICAL();
                     return ESP_ERR_ULTRASONIC_SENSOR_ECHO_ERROR;
                 }
 
@@ -161,25 +166,28 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
                 if (time[!event.side][END] != 0)   
                 {
                     esp_timer_stop(ping_timeout_timer_handle);
+                    // taskEXIT_CRITICAL();
                     break;
                 }  
             }
             else if(event.event_code == PING_TIMEOUT)
             {
                 // timeout
-
+    	        ESP_LOGI(TAG, "ping");
                 // Kill both echo timers if active
                 if (esp_timer_is_active(echo_timeout_timer_handle[LEFT_SIDE])) esp_timer_stop(echo_timeout_timer_handle[LEFT_SIDE]);
                 if (esp_timer_is_active(echo_timeout_timer_handle[RIGHT_SIDE])) esp_timer_stop(echo_timeout_timer_handle[RIGHT_SIDE]);
 
-                // Kill ping timer if active
-                if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
+                // // Kill ping timer if active
+                // if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
 
                 interrupt_disable(sensor);
+                // taskEXIT_CRITICAL();
                 return ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT;
             }
             else if(event.event_code == ECHO_TIMEOUT)
             {
+                ESP_LOGI(TAG, "echo");
                 // Kill both echo timers if active
                 if (esp_timer_is_active(echo_timeout_timer_handle[LEFT_SIDE])) esp_timer_stop(echo_timeout_timer_handle[LEFT_SIDE]);
                 if (esp_timer_is_active(echo_timeout_timer_handle[RIGHT_SIDE])) esp_timer_stop(echo_timeout_timer_handle[RIGHT_SIDE]);
@@ -188,11 +196,12 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
                 if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
 
                 interrupt_disable(sensor);
+                // taskEXIT_CRITICAL();
                 return ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT;    
             }
         }
     }
-    
+    xQueueReset(queueEventData);
     interrupt_disable(sensor);
 
 
@@ -200,9 +209,9 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float
     *distance_left = soundSpeed * (float)(time[LEFT_SIDE][END] - time[LEFT_SIDE][START]) / 2e6; 
     *distance_right = soundSpeed * (float)(time[RIGHT_SIDE][END] - time[RIGHT_SIDE][START]) / 2e6; 
     
-    ESP_LOGI(TAG, "distance left: %f | distance right: %f", *distance_left, *distance_right);
-    ESP_LOGI(TAG, "speed: %f time_left: %"PRIu64", %"PRIu64"", soundSpeed, time[LEFT_SIDE][START], time[LEFT_SIDE][END]);
-
+    // ESP_LOGI(TAG, "distance left: %f | distance right: %f", *distance_left, *distance_right);
+    // ESP_LOGI(TAG, "speed: %f time_left: %"PRIu64", %"PRIu64"", soundSpeed, time[LEFT_SIDE][START], time[LEFT_SIDE][END]);
+    
     return ESP_OK;
 }
 
@@ -252,22 +261,22 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
 
     // Create main ping timeout timer
     ESP_LOGI(TAG, "Create timers");
-    event_t ping_timeout_timer_arg = { PING_TIMEOUT, SIDE_NONE, esp_timer_get_time() };
+    event_code_t ping_event_code = PING_TIMEOUT;
     const esp_timer_create_args_t ping_timeout_timer_args = 
     {
         .callback = &timeout_timer_callback,
         .name = "Ping timeout timer",
-        .arg = &ping_timeout_timer_arg
+        .arg = &ping_event_code
     };
     ESP_ERROR_CHECK(esp_timer_create(&ping_timeout_timer_args, &ping_timeout_timer_handle));
 
     // Create 2 timeout timers for each echo reply
-    event_t echo_timeout_timer_arg = { ECHO_TIMEOUT, SIDE_NONE, esp_timer_get_time() };
+    event_code_t echo_event_code = ECHO_TIMEOUT;
     const esp_timer_create_args_t echo_timeout_timer_args = 
     {
         .callback = &timeout_timer_callback,
         .name = "Echo timeout timer",
-        .arg = &echo_timeout_timer_arg
+        .arg = &echo_event_code
     };
 
     event_t* event = (event_t*)echo_timeout_timer_args.arg;
