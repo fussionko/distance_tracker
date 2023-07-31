@@ -25,7 +25,7 @@
 
 #define GPIO_DHT22      33
 
-#define READ_ULTRASONIC_MS 100 // read [ms]
+#define READ_ULTRASONIC_MS 2000 // read [ms]
 #define UPDATE_SOUND_SPEED 5000 //5000000 // update speed of sound at that interval in [us]
 
 static const char* TAG = "Main script";

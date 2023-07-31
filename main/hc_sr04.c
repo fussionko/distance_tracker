@@ -20,13 +20,13 @@
 
 static const char* TAG = "HC-SR04";
 
-static float soundSpeed;        // [m/s]
-static uint64_t echoReplyTimeout;  // [us]
+static float soundSpeed;            // [m/s]
+static uint64_t echoReplyTimeout;   // [us]
 
 // Ping timeout timer handle
 static esp_timer_handle_t ping_timeout_timer_handle;
 
-// Echo timeout timer handel
+// Echo timeout timer handle
 static esp_timer_handle_t echo_timeout_timer_handle;
 
 QueueHandle_t queueEventData;
@@ -44,6 +44,7 @@ void set_sound_speed(float temperature, float humidity)
 
 static void IRAM_ATTR echo_intr_handler(void* args)
 {   
+    ESP_EARLY_LOGI(TAG, "ECHO");
     const event_t event = { gpio_get_level(*(gpio_num_t*)args), esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
@@ -207,11 +208,14 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     gpio_pulldown_dis(sensor->echo);
     gpio_pullup_dis(sensor->echo);
 
+    gpio_pulldown_dis(sensor->trigger);
+    gpio_pullup_dis(sensor->trigger);
+
     // Allocate resources
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
 
     // Add isr handlers
-    ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)&sensor->echo));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)sensor->echo));
 
     //interrupt_disable(sensor);
 
