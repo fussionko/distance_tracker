@@ -26,26 +26,12 @@
 #define GPIO_DHT22      33
 
 #define READ_ULTRASONIC_MS 2000 // read [ms]
-#define UPDATE_SOUND_SPEED 5000//5000000 // update speed of sound at that interval in [us]
+#define UPDATE_SOUND_SPEED 5000 //5000000 // update speed of sound at that interval in [us]
 
 static const char* TAG = "Main script";
 
 void update_sound_speed()
 {
-	// // ESP_LOGI(TAG, "update sound speed");
-    // ESP_LOGI(TAG, "22222");
-	// int ret = read_dht22();
-    // ESP_LOGI(TAG, "33333333");
-	// if (ret == 0)
-    // {
-    //     ESP_LOGI(TAG, "123123");
-    //     set_sound_speed(get_temperature(), get_humidity());
-    // }
-    // else
-    // {
-    //     ESP_LOGI(TAG, "111111");
-    //     ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
-    // }
     int ret = read_dht22();
     if (ret == 0)
     {
@@ -127,15 +113,6 @@ static esp_timer_handle_t update_sound_timer_handle;
 
 void app_main(void)
 {
-    // Setup timer
-    // const esp_timer_create_args_t update_sound_timer_args = 
-    // {
-    //     .callback = &update_sound_speed,
-    //     .name = "Update sound speed",
-    // };
- 
-    // ESP_ERROR_CHECK(esp_timer_create(&update_sound_timer_args, &update_sound_timer_handle));
-    
     // Init dht22 sensor
     ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
 
