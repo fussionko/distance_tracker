@@ -44,7 +44,6 @@ void set_sound_speed(float temperature, float humidity)
 
 static void IRAM_ATTR echo_intr_handler(void* args)
 {   
-    ESP_EARLY_LOGI(TAG, "ECHO");
     const event_t event = { gpio_get_level(*(gpio_num_t*)args), esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
@@ -191,31 +190,31 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     ESP_LOGI(TAG, "Ultrasonic sensor init start");
 
     // Reset gpio pins
-    gpio_reset_pin(sensor->trigger);
-    gpio_reset_pin(sensor->echo);
+    ESP_ERROR_CHECK(gpio_reset_pin(sensor->trigger));
+    ESP_ERROR_CHECK(gpio_reset_pin(sensor->echo));
 
     // Set direction
-    gpio_set_direction(sensor->trigger, GPIO_MODE_OUTPUT);
-    gpio_set_direction(sensor->echo, GPIO_MODE_INPUT);
+    ESP_ERROR_CHECK(gpio_set_direction(sensor->trigger, GPIO_MODE_OUTPUT));
+    ESP_ERROR_CHECK(gpio_set_direction(sensor->echo, GPIO_MODE_INPUT));
 
-    gpio_set_level(sensor->trigger, 0);
+    ESP_ERROR_CHECK(gpio_set_level(sensor->trigger, 0));
 
     ESP_LOGI(TAG, "Interrupt setup start");
 
     // Interrupt is triggerd on rising or falling edge
-    gpio_set_intr_type(sensor->echo, GPIO_INTR_ANYEDGE);
+    ESP_ERROR_CHECK(gpio_set_intr_type(sensor->echo, GPIO_INTR_POSEDGE));
 
-    gpio_pulldown_dis(sensor->echo);
-    gpio_pullup_dis(sensor->echo);
+    ESP_ERROR_CHECK(gpio_pulldown_dis(sensor->echo));
+    ESP_ERROR_CHECK(gpio_pullup_dis(sensor->echo));
 
-    gpio_pulldown_dis(sensor->trigger);
-    gpio_pullup_dis(sensor->trigger);
+    ESP_ERROR_CHECK(gpio_pulldown_dis(sensor->trigger));
+    ESP_ERROR_CHECK(gpio_pullup_dis(sensor->trigger));
 
     // Allocate resources
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
 
     // Add isr handlers
-    ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)sensor->echo));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)&sensor->echo));
 
     //interrupt_disable(sensor);
 
