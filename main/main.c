@@ -20,8 +20,8 @@
 #include "temperature_sensor.h"
 
 // GPIO pins
-#define GPIO_TRIGGER    16
-#define GPIO_ECHO       17
+#define GPIO_TRIGGER    2
+#define GPIO_ECHO       15
 
 #define GPIO_DHT22      33
 
