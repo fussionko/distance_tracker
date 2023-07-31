@@ -22,16 +22,15 @@ typedef enum event_code_t { ECHO_END = 0, ECHO_START = 1, PING_TIMEOUT = 2, ECHO
 typedef struct 
 {
     event_code_t event_code;
-    uint8_t side;
     uint64_t time;
 } event_t;
 
  
-// 1 trigger 2 echo pins
+// 1 trigger 1 echo pin
 typedef struct 
 {
     gpio_num_t trigger;
-    gpio_num_t echo_left, echo_right;
+    gpio_num_t echo;
 } ultrasonic_sensor_t;
 
 
@@ -42,6 +41,6 @@ void set_sound_speed(float temperature, float humidity);
 void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor);
 
 // Measure the distance from left and right sensor to target
-esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance_left, float* distance_right);
+esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance);
 
 #endif /* _ULTRASONIC_SENSOR_H__ */

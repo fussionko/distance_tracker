@@ -20,31 +20,57 @@
 #include "temperature_sensor.h"
 
 // GPIO pins
-#define GPIO_TRIGGER    4
-#define GPIO_ECHO_LEFT  15
-#define GPIO_ECHO_RIGHT 2
+#define GPIO_TRIGGER    16
+#define GPIO_ECHO       17
 
-#define DHT22_SENSOR 33
+#define GPIO_DHT22      33
 
 #define READ_ULTRASONIC_MS 2000 // read [ms]
-#define UPDATE_SOUND_SPEED 5000000 // update speed of sound at that interval in [us]
-
-#define DISTANCE_TX_RX_M 0.0185f // distance from transmittor to reciever [m]
-
+#define UPDATE_SOUND_SPEED 5000//5000000 // update speed of sound at that interval in [us]
 
 static const char* TAG = "Main script";
 
 void update_sound_speed()
 {
-	// ESP_LOGI(TAG, "update sound speed");
-	int ret = read_dht22();
-	if (ret == 0)
+	// // ESP_LOGI(TAG, "update sound speed");
+    // ESP_LOGI(TAG, "22222");
+	// int ret = read_dht22();
+    // ESP_LOGI(TAG, "33333333");
+	// if (ret == 0)
+    // {
+    //     ESP_LOGI(TAG, "123123");
+    //     set_sound_speed(get_temperature(), get_humidity());
+    // }
+    // else
+    // {
+    //     ESP_LOGI(TAG, "111111");
+    //     ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
+    // }
+    int ret = read_dht22();
+    if (ret == 0)
     {
+        ESP_LOGI(TAG, "123123");
         set_sound_speed(get_temperature(), get_humidity());
     }
     else
     {
-        ESP_LOGE(TAG, "ERROR update sound speed %d -> name: %s\n", ret, dht22_error_names[ret]);
+        ESP_LOGI(TAG, "111111");
+        ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
+    }
+    while(1)
+    {
+        vTaskDelay(UPDATE_SOUND_SPEED / portTICK_PERIOD_MS);
+        read_dht22();
+            if (ret == 0)
+            {
+                ESP_LOGI(TAG, "123123");
+                set_sound_speed(get_temperature(), get_humidity());
+            }
+            else
+            {
+                ESP_LOGI(TAG, "111111");
+                ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
+            }
     }
 }
 
@@ -52,7 +78,7 @@ void ultrasonic_read()
 {
     ESP_LOGI(TAG, "Start");
 
-    ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO_LEFT, GPIO_ECHO_RIGHT };
+    ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO};
 
     // Init ultrasonic sensor
     ultrasonic_sensor_init(&ultrasonic_sensor);
@@ -61,10 +87,10 @@ void ultrasonic_read()
     ESP_LOGI(TAG, "Start main loop");
     while(true)
     {
-        float distance_left, distance_right;
+        float distance;
 
         // ESP_LOGI(TAG, "Start measure");
-        esp_err_t res = measure(&ultrasonic_sensor, &distance_left, &distance_right);
+        esp_err_t res = measure(&ultrasonic_sensor, &distance);
 
         // Handle error
         // ESP_LOGI(TAG, "Start error handle");
@@ -88,31 +114,8 @@ void ultrasonic_read()
         }
         else
         {
-            // [m/s]
-            // printf("Distance LEFT: %.05f cm\n", distance_left * 100);
-            // printf("Distance RIGHT: %.05f cm\n", distance_right * 100); 
-
-            if (fabs(distance_left - distance_right) > (DISTANCE_TX_RX_M * 2))
-                //ESP_LOGW(TAG, "ERROR wrong read");
-                continue;
-            else
-            {
-                float dis_left2 = pow(distance_left, 2);
-                float dis_right2 = pow(distance_right, 2);
-
-                float formula_x = (dis_left2 - dis_right2) / (DISTANCE_TX_RX_M * 4);
-                float formula_y = sqrt(dis_right2 - pow(DISTANCE_TX_RX_M - formula_x, 2));
-
-                if (pow(DISTANCE_TX_RX_M - formula_x, 2) < 0)
-                    //ESP_LOGW(TAG, "ERROR wrong read");
-                    continue;
-                else
-                {
-                    printf("formula_x: %0.3f\n", formula_x * 100);
-                    printf("formula_y: %0.3f\n", formula_y * 100);
-                }
-  
-            }
+            printf("distance [cm]: %0.5f\n", distance * 100);
+     
         }
         printf("-------------------------------\n");
 
@@ -120,25 +123,27 @@ void ultrasonic_read()
     }    
 }
 
-
+static esp_timer_handle_t update_sound_timer_handle;
 
 void app_main(void)
 {
     // Setup timer
-    const esp_timer_create_args_t update_temp_timer_args = 
+    const esp_timer_create_args_t update_sound_timer_args = 
     {
         .callback = &update_sound_speed,
         .name = "Update sound speed",
     };
-
-    esp_timer_handle_t update_temp_timer_handle;
-    ESP_ERROR_CHECK(esp_timer_create(&update_temp_timer_args, &update_temp_timer_handle));
-
+    ESP_LOGI(TAG, "1");
+    ESP_ERROR_CHECK(esp_timer_create(&update_sound_timer_args, &update_sound_timer_handle));
+    ESP_LOGI(TAG, "2");
     // Init dht22 sensor
-    init_dht22(DHT22_SENSOR);
-    update_sound_speed();
-    esp_timer_start_periodic(update_temp_timer_handle, UPDATE_SOUND_SPEED);
-
-    
-    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
+    ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
+    ESP_LOGI(TAG, "3");
+    //update_sound_speed();
+    ESP_LOGI(TAG, "4");
+    // esp_timer_start_periodic(update_sound_timer_handle, UPDATE_SOUND_SPEED);
+    ESP_LOGI(TAG, "5");
+    xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
+    //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);
+    //xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
 }
