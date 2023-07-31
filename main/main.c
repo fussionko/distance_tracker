@@ -25,13 +25,17 @@
 
 #define GPIO_DHT22      33
 
-#define READ_ULTRASONIC_MS 2000 // read [ms]
+#define READ_ULTRASONIC_MS 100 // read [ms]
 #define UPDATE_SOUND_SPEED 5000 //5000000 // update speed of sound at that interval in [us]
 
 static const char* TAG = "Main script";
 
 void update_sound_speed()
 {
+    // Init dht22 sensor
+    ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
+
+
     int ret = read_dht22();
     if (ret == 0)
     {
@@ -64,7 +68,7 @@ void ultrasonic_read()
 {
     ESP_LOGI(TAG, "Start");
 
-    ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO};
+    ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO };
 
     // Init ultrasonic sensor
     ultrasonic_sensor_init(&ultrasonic_sensor);
@@ -113,12 +117,7 @@ static esp_timer_handle_t update_sound_timer_handle;
 
 void app_main(void)
 {
-    // Init dht22 sensor
-    ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
 
-    //update_sound_speed();
-
-    // esp_timer_start_periodic(update_sound_timer_handle, UPDATE_SOUND_SPEED);
 
     //xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
     //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);

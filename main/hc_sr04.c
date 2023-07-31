@@ -11,7 +11,7 @@
 
 #define TRIGGER_LOW_DELAY   2       // low delay [us]
 #define TRIGGER_HIGH_DELAY  10      // high delay [us]
-#define PING_TIMEOUT_TIME   100   // ping timeout [us]
+#define PING_TIMEOUT_TIME   100     // ping timeout [us]
 
 
 
@@ -84,7 +84,6 @@ esp_err_t trigger(const ultrasonic_sensor_t* sensor)
     esp_rom_delay_us(TRIGGER_HIGH_DELAY);
     gpio_set_level(sensor->trigger, 0);
 
-
     return ESP_OK;
 }
 
@@ -104,10 +103,10 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
 
     // Start ping timeout timer
     esp_timer_start_once(ping_timeout_timer_handle, PING_TIMEOUT_TIME + TRIGGER_LOW_DELAY + TRIGGER_HIGH_DELAY);
-
+    //interrupt_enable(sensor);
     // Start trigger
     trigger(sensor);
-    interrupt_enable(sensor);
+    
 
     while(1)
     {
@@ -178,8 +177,7 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
         }
     }
     
-    interrupt_disable(sensor);
-
+    //interrupt_disable(sensor);
 
     // distance = speed of sound * (time_end - time_start)  / (2 * 10^6) -> [m/s]
     *distance = soundSpeed * (float)(time[END] - time[START]) / 2e6; 
@@ -191,13 +189,15 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
 {
     ESP_LOGI(TAG, "Ultrasonic sensor init start");
 
+    // Reset gpio pins
     gpio_reset_pin(sensor->trigger);
     gpio_reset_pin(sensor->echo);
+
+    // Set direction
     gpio_set_direction(sensor->trigger, GPIO_MODE_OUTPUT);
     gpio_set_direction(sensor->echo, GPIO_MODE_INPUT);
-    gpio_set_level(sensor->trigger, 0);
 
-    ESP_LOGI(TAG, "Ultrasonic sensor init end");
+    gpio_set_level(sensor->trigger, 0);
 
     ESP_LOGI(TAG, "Interrupt setup start");
 
@@ -205,19 +205,16 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     gpio_set_intr_type(sensor->echo, GPIO_INTR_ANYEDGE);
 
     gpio_pulldown_dis(sensor->echo);
-
-    gpio_pulldown_dis(sensor->echo);
+    gpio_pullup_dis(sensor->echo);
 
     // Allocate resources
-    gpio_install_isr_service(0);
+    ESP_ERROR_CHECK(gpio_install_isr_service(0));
 
     // Add isr handlers
-    gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)&sensor->echo);
-
-    interrupt_disable(sensor);
+    ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)&sensor->echo));
 
     //interrupt_disable(sensor);
-    ESP_LOGI(TAG, "Interrupt setup end");
+
 
     // Create data queue
     ESP_LOGI(TAG, "Create queue");
@@ -234,15 +231,11 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     ESP_ERROR_CHECK(esp_timer_create(&ping_timeout_timer_args, &ping_timeout_timer_handle));
 
     // Create  timeout timer for echo reply
-
     const esp_timer_create_args_t echo_timeout_timer_args = 
     {
         .callback = &echo_timeout_timer_callback,
         .name = "Echo timeout timer"
     };
-
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, &echo_timeout_timer_handle));
-
-
 }
 
