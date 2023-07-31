@@ -103,48 +103,40 @@ To request data from DHT:
 
 //#define RETURN_ERROR_ON_TIMEOUT(time, timeout_us, state) ({time = get_signal_level_time(timeout_us, state);if (sec < 0){return DHT22_TIMEOUT_ERROR;}})
 
-portMUX_TYPE myMutex = portMUX_INITIALIZER_UNLOCKED;
-
-#include "freertos/portmacro.h"
 
 //critical section
 
 dht22_error read_dht22()
 {
-    ESP_LOGI(TAG, "start read");
     uint8_t data[SEND_MAX_DATA_ARRAY] = { 0 };
     // Maybe use i in for loop to calculate indices
     uint8_t byteIndex = 0, bitIndex = 7;
 
     //portDISABLE_INTERRUPTS();
-    // taskENTER_CRITICAL(&myMutex);
-    ESP_LOGI(TAG, "change dir");
+
     // Change gpio direction to output
     gpio_set_direction(sensor_gpio_pin, GPIO_MODE_OUTPUT);
 
-ESP_LOGI(TAG, "1");
     // Send signal to DHT22 sensor
     gpio_set_level(sensor_gpio_pin, GPIO_OUTPUT_LOW);
     ets_delay_us(REQUEST_LOW_PULSE_DELAY);
 
-ESP_LOGI(TAG, "2");
     gpio_set_level(sensor_gpio_pin, GPIO_OUTPUT_HIGH);
     ets_delay_us(REQUEST_HIGH_PULSE_DELAY);
 
-ESP_LOGI(TAG, "3");
     // Change gpio direction to input
     gpio_set_direction(sensor_gpio_pin, GPIO_MODE_INPUT);
 
     // DHT22 keeps line low for 80us and then high for 80us
     // if line doesn't change in that timeframe return error
-    ESP_LOGI(TAG, "start info");
+
     int sec = 0;
     sec = get_signal_level_time(REQUEST_SENSOR_TIME_LOW, GPIO_OUTPUT_LOW);
     if (sec < 0) return DHT22_TIMEOUT_ERROR;
-ESP_LOGI(TAG, "4");
+
     sec = get_signal_level_time(REQUEST_SENSOR_TIME_HIGH, GPIO_OUTPUT_HIGH);
     if (sec < 0) return DHT22_TIMEOUT_ERROR;
-ESP_LOGI(TAG, "5");
+
     // No errors -> DHT22 sends data
     for (int i = 0; i < SEND_NUM_DATA_BITS; ++i)
     {

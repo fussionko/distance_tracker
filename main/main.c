@@ -60,7 +60,7 @@ void update_sound_speed()
     while(1)
     {
         vTaskDelay(UPDATE_SOUND_SPEED / portTICK_PERIOD_MS);
-        read_dht22();
+        ret = read_dht22();
             if (ret == 0)
             {
                 ESP_LOGI(TAG, "123123");
@@ -128,22 +128,22 @@ static esp_timer_handle_t update_sound_timer_handle;
 void app_main(void)
 {
     // Setup timer
-    const esp_timer_create_args_t update_sound_timer_args = 
-    {
-        .callback = &update_sound_speed,
-        .name = "Update sound speed",
-    };
-    ESP_LOGI(TAG, "1");
-    ESP_ERROR_CHECK(esp_timer_create(&update_sound_timer_args, &update_sound_timer_handle));
-    ESP_LOGI(TAG, "2");
+    // const esp_timer_create_args_t update_sound_timer_args = 
+    // {
+    //     .callback = &update_sound_speed,
+    //     .name = "Update sound speed",
+    // };
+ 
+    // ESP_ERROR_CHECK(esp_timer_create(&update_sound_timer_args, &update_sound_timer_handle));
+    
     // Init dht22 sensor
     ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
-    ESP_LOGI(TAG, "3");
+
     //update_sound_speed();
-    ESP_LOGI(TAG, "4");
+
     // esp_timer_start_periodic(update_sound_timer_handle, UPDATE_SOUND_SPEED);
-    ESP_LOGI(TAG, "5");
-    xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
+
+    //xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
     //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);
-    //xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
+    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
 }
