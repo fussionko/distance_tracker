@@ -186,6 +186,7 @@ int cmpfunc(const void * a, const void * b) {
 
 esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const uint64_t time_period_us, const uint32_t sampling_rate_per_second)
 {
+    // If sampling rate higher than 20 error
     if (sampling_rate_per_second > 20 || sampling_rate_per_second == 0) return ESP_ERR_INVALID_ARG;
 
     double distance_sum = 0.0;
@@ -193,6 +194,7 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
     // Convert sampling rate per second to ms delay
     float delay_sample_ms = 1 / (sampling_rate_per_second / 1e3);
     
+    // Create array of distances
     float* distance_array = (float*)malloc((time_period_us * (sampling_rate_per_second / 1e6) + 3) * sizeof(float));
     if (distance_array == NULL) return ESP_ERR_NO_MEM;
 
@@ -203,6 +205,7 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
 
         esp_err_t res = measure(sensor, &temp_distance);
 
+        // Check data is ok
         if (res != ESP_OK) continue;
         if (temp_distance > MAX_DISTANCE) continue;
 
@@ -214,6 +217,7 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
         vTaskDelay(delay_sample_ms / portTICK_PERIOD_MS);
     }   while(esp_timer_get_time() - start_time < time_period_us);
 
+    // No good reads
     if (count == 0)
     {
         *distance = distance_sum;
@@ -221,16 +225,15 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
         return ESP_ERR_TIMEOUT;
     }
 
-    ESP_LOGI(TAG, "Distance -> sum: %f, count: %"PRIu32"", distance_sum, count);
+
     distance_array = (float*)realloc(distance_array, count * sizeof(float));
     if (distance_array == NULL) return ESP_ERR_NO_MEM;
 
-    //*distance = distance_sum / count;
     float avg_distance = distance_sum / count;
     qsort(distance_array, count, sizeof(float), cmpfunc);
     *distance = distance_array[count / 2];
 
-    ESP_LOGI(TAG, "Distance -> avg: %f, median: %f, count: %"PRIu32"", avg_distance, *distance, count);
+    //ESP_LOGI(TAG, "Distance -> avg: %f, median: %f, count: %"PRIu32"", avg_distance, *distance, count);
 
     free(distance_array);
 

@@ -18,8 +18,10 @@
 // Temperature sensor GPIO pin
 #define TEMPERATURE_GPIO_DATA   33
 
-#define READ_ULTRASONIC_MS 50 // read [ms]
-#define UPDATE_SOUND_SPEED 5000 //5000000 // update speed of sound at that interval in [us]
+#define UPDATE_SOUND_SPEED 5000 // update speed of sound at that interval in [us]
+
+#define READ_ULTRASONIC_MS      50  // [ms]
+#define READ_ULTRASONIC_AVG_MS  100 // [ms]
 
 static const char* TAG = "Main script";
 
@@ -129,7 +131,7 @@ void ultrasonic_read_avg()
         }
         printf("-------------------------------\n");
 
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(READ_ULTRASONIC_AVG_MS / portTICK_PERIOD_MS);
     }    
 }
 
