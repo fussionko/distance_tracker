@@ -5,15 +5,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "sys/time.h"
 
 #include "esp_check.h"
 
-#define TRIGGER_LOW_DELAY   2       // low delay [us]
-#define TRIGGER_HIGH_DELAY  10      // high delay [us]
-#define PING_TIMEOUT_TIME   1000000     // ping timeout [us]
+#define TRIGGER_LOW_DELAY   2           // low delay [us]
+#define TRIGGER_HIGH_DELAY  10          // high delay [us]
+#define PING_TIMEOUT_TIME   100000      // ping timeout [us] ->0.1s
 
-#define SOUND_SPEED_START   331 // [m/s]
+#define SOUND_SPEED_START           331.0f      // [m/s]
+#define ECHO_REPLY_TIMEOUT_START    25000       // [us]
 
 //#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
 //#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
@@ -93,8 +93,6 @@ esp_err_t trigger(const ultrasonic_sensor_t* sensor)
 
 esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
 {
-    ESP_LOGI(TAG, "Start measure");
-
     xQueueReset(queueEventData);
 
     event_t event;
@@ -104,18 +102,16 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
 
     // Start ping timeout timer
     esp_timer_start_once(ping_timeout_timer_handle, PING_TIMEOUT_TIME + TRIGGER_LOW_DELAY + TRIGGER_HIGH_DELAY);
-    //interrupt_enable(sensor);
+
     // Start trigger
     trigger(sensor);
     
-
     while(1)
     {
         // Check if event was added to queue
         if (xQueueReceive(queueEventData, &event, 0))
         {
-            ESP_LOGI(TAG, "queue recieved event code: %d", (int)event.event_code);
-
+            //ESP_LOGI(TAG, "queue recieved event code: %d", (int)event.event_code);
             if (event.event_code == ECHO_START)
             {    
                 time[START] = event.time;      
@@ -172,7 +168,6 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
         }
     }
     
-
     // distance = speed of sound * (time_end - time_start)  / (2 * 10^6) -> [m/s]
     *distance = soundSpeed * (float)(time[END] - time[START]) / 2e6; 
     
@@ -210,9 +205,6 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     // Add isr handlers
     ESP_ERROR_CHECK(gpio_isr_handler_add(sensor->echo, echo_intr_handler, (void*)&sensor->echo));
 
-    //interrupt_disable(sensor);
-
-
     // Create data queue
     ESP_LOGI(TAG, "Create queue");
     queueEventData = xQueueCreate(5, sizeof(event_t));
@@ -235,7 +227,8 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     };
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, &echo_timeout_timer_handle));
 
-    soundSpeed = 331.0f;
-    echoReplyTimeout = 100000;
+
+    soundSpeed = SOUND_SPEED_START;
+    echoReplyTimeout = ECHO_REPLY_TIMEOUT_START;
 }
 
