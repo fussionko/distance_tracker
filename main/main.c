@@ -14,10 +14,9 @@
 #include "esp_system.h"
 #include "sys/time.h"
 #include "ultrasonic_sensor.h"
-
-
-
 #include "temperature_sensor.h"
+#include "esp_check.h"
+
 
 // GPIO pins
 #define GPIO_TRIGGER    25
@@ -32,7 +31,7 @@ static const char* TAG = "Main script";
 
 void update_sound_speed()
 {
-    // Init dht22 sensor
+    // Init dht22 ultrasonic_sensor
     ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
 
 
@@ -64,13 +63,14 @@ void update_sound_speed()
     }
 }
 
+
+
 void ultrasonic_read()
 {
     ESP_LOGI(TAG, "Start");
 
     ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO };
 
-    // Init ultrasonic sensor
     ultrasonic_sensor_init(&ultrasonic_sensor);
 
     // Infinite loop -> prob change in future to certain amount of repetition
@@ -113,7 +113,6 @@ void ultrasonic_read()
     }    
 }
 
-static esp_timer_handle_t update_sound_timer_handle;
 
 void app_main(void)
 {

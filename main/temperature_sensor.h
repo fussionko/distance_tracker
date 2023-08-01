@@ -17,7 +17,7 @@
 
 // DHT22 error codes
 typedef enum dht22_error { DHT22_OK = 0, DHT22_CHECKSUM_ERROR = 1, DHT22_TIMEOUT_ERROR = 2 } dht22_error;
-static const char* dht22_error_names[] = { "DHT22_OK", "DHT22_CHECKSUM_ERROR", "DHT22_TIMEOUT_ERROR" };
+//static const char* dht22_error_names[] = { "DHT22_OK", "DHT22_CHECKSUM_ERROR", "DHT22_TIMEOUT_ERROR" };
 
 esp_err_t init_dht22(gpio_num_t pin);
 

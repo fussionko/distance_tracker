@@ -15,7 +15,8 @@
         "numbers": "c",
         "queue.h": "c",
         "temperature_sensor.h": "c",
-        "esp_check.h": "c"
+        "esp_check.h": "c",
+        "esp_system.h": "c"
     },
     "idf.flashType": "UART"
 }

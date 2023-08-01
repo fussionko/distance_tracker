@@ -11,7 +11,7 @@
 
 #define TRIGGER_LOW_DELAY   2       // low delay [us]
 #define TRIGGER_HIGH_DELAY  10      // high delay [us]
-#define PING_TIMEOUT_TIME   100     // ping timeout [us]
+#define PING_TIMEOUT_TIME   1000000     // ping timeout [us]
 
 
 
@@ -23,10 +23,10 @@ static const char* TAG = "HC-SR04";
 static float soundSpeed;            // [m/s]
 static uint64_t echoReplyTimeout;   // [us]
 
-// Ping timeout timer handle
+// // Ping timeout timer handle
 static esp_timer_handle_t ping_timeout_timer_handle;
 
-// Echo timeout timer handle
+// // Echo timeout timer handle
 static esp_timer_handle_t echo_timeout_timer_handle;
 
 QueueHandle_t queueEventData;
@@ -44,22 +44,22 @@ void set_sound_speed(float temperature, float humidity)
 
 static void IRAM_ATTR echo_intr_handler(void* args)
 {   
-    const event_t event = { gpio_get_level(*(gpio_num_t*)args), esp_timer_get_time() };
+    const event_t event = { gpio_get_level(GPIO_NUM_26), esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
 
 
-esp_err_t interrupt_enable(const ultrasonic_sensor_t* sensor)
-{
-    ESP_RETURN_ON_ERROR(gpio_intr_enable(sensor->echo), TAG, "gpio_intr_enable echo left");
-    return ESP_OK;
-}
+// esp_err_t interrupt_enable(const ultrasonic_sensor_t* sensor)
+// {
+//     ESP_RETURN_ON_ERROR(gpio_intr_enable(sensor->echo), TAG, "gpio_intr_enable echo left");
+//     return ESP_OK;
+// }
 
-esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
-{
-    ESP_RETURN_ON_ERROR(gpio_intr_disable(sensor->echo), TAG, "gpio_intr_disable echo");
-    return ESP_OK;
-}
+// esp_err_t interrupt_disable(const ultrasonic_sensor_t* sensor)
+// {
+//     ESP_RETURN_ON_ERROR(gpio_intr_disable(sensor->echo), TAG, "gpio_intr_disable echo");
+//     return ESP_OK;
+// }
 
 void ping_timeout_timer_callback(void* args)
 {
@@ -123,8 +123,6 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
                 {
                     esp_timer_stop(echo_timeout_timer_handle);
 
-                    interrupt_disable(sensor);
-
                     // Kill ping timer if active
                     if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
                     
@@ -156,8 +154,6 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
         
                 // Kill ping timer if active
                 if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
-
-                interrupt_disable(sensor);
                 
                 return ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT;
             }
@@ -169,15 +165,12 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
 
                 // Kill ping timer if active
                 if (esp_timer_is_active(ping_timeout_timer_handle)) esp_timer_stop(ping_timeout_timer_handle);
-
-                interrupt_disable(sensor);
                 
                 return ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT;    
             }
         }
     }
     
-    //interrupt_disable(sensor);
 
     // distance = speed of sound * (time_end - time_start)  / (2 * 10^6) -> [m/s]
     *distance = soundSpeed * (float)(time[END] - time[START]) / 2e6; 
@@ -202,7 +195,7 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     ESP_LOGI(TAG, "Interrupt setup start");
 
     // Interrupt is triggerd on rising or falling edge
-    ESP_ERROR_CHECK(gpio_set_intr_type(sensor->echo, GPIO_INTR_POSEDGE));
+    ESP_ERROR_CHECK(gpio_set_intr_type(sensor->echo, GPIO_INTR_ANYEDGE));
 
     ESP_ERROR_CHECK(gpio_pulldown_dis(sensor->echo));
     ESP_ERROR_CHECK(gpio_pullup_dis(sensor->echo));
@@ -240,5 +233,8 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
         .name = "Echo timeout timer"
     };
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, &echo_timeout_timer_handle));
+
+    soundSpeed = 331.0f;
+    echoReplyTimeout = 100000;
 }
 
