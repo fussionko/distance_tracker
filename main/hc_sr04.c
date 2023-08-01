@@ -1,5 +1,6 @@
 #include "ultrasonic_sensor.h"
 
+#include <stdlib.h>
 #include <math.h>
 
 #include "freertos/FreeRTOS.h"
@@ -178,6 +179,10 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
 }
 
 
+int cmpfunc(const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
 esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const uint64_t time_period_us, const uint32_t sampling_rate_per_second)
 {
     double distance_sum = 0.0;
@@ -185,6 +190,9 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
     // Convert sampling rate per second to ms delay
     float delay_sample_ms = 1 / (sampling_rate_per_second / 1e3);
     
+    float* distance_array = (float*)malloc((time_period_us * (sampling_rate_per_second / 1e6)) * sizeof(float));
+    if (distance_array == NULL) return ESP_ERR_NO_MEM;
+
     uint32_t count = 0;
     const uint64_t start_time = esp_timer_get_time();
     while(esp_timer_get_time() - start_time < time_period_us)
@@ -195,8 +203,10 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
 
         if (res != ESP_OK) continue;
 
+        distance_array[count] = temp_distance;
         ++count;
         distance_sum += temp_distance;
+        
 
         vTaskDelay(delay_sample_ms / portTICK_PERIOD_MS);
     }    
@@ -204,12 +214,20 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
     if (count == 0)
     {
         *distance = distance_sum;
+        free(distance_array);
         return ESP_ERR_TIMEOUT;
     }
 
-    ESP_LOGI(TAG, "count: %"PRIu32"", count);
+    
 
-    *distance = distance_sum / count;
+    //*distance = distance_sum / count;
+    float avg_distance = distance_sum / count;
+    qsort(distance_array, count, sizeof(float), cmpfunc);
+    *distance = distance_array[count / 2];
+
+    ESP_LOGI(TAG, "Distance -> avg: %f, median: %f, count: %"PRIu32"", avg_distance, *distance, count);
+
+    free(distance_array);
 
     return ESP_OK;
 }
