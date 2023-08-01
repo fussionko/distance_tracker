@@ -98,7 +98,7 @@ void ultrasonic_read_avg()
     {
         float distance;
 
-        esp_err_t res = measure_avg(&ultrasonic_sensor, &distance, 1000000, 10);
+        esp_err_t res = measure_avg(&ultrasonic_sensor, &distance, 1000000, 20);
 
         // Handle error
         if (res != ESP_OK)
@@ -115,6 +115,9 @@ void ultrasonic_read_avg()
 		    	case ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT:
 		    		printf("Echo timeout (i.e. distance too big)\n");
 		    		break;
+                case ESP_ERR_TIMEOUT:
+                    printf("Timeout\n");
+                    break;
 		    	default:
 		    		printf("%d\n", res);
 		    }
@@ -126,7 +129,7 @@ void ultrasonic_read_avg()
         }
         printf("-------------------------------\n");
 
-        vTaskDelay(READ_ULTRASONIC_MS / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }    
 }
 
@@ -135,8 +138,8 @@ void app_main(void)
 {
 
 
-    xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
+    xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 0, NULL);
     //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);
     // xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
-    xTaskCreate(&ultrasonic_read_avg, "Ultrasonic read", 8192, NULL, 2, NULL);
+    xTaskCreate(&ultrasonic_read_avg, "Ultrasonic read avg", 8192, NULL, 2, NULL);
 }

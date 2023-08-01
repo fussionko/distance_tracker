@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <math.h>
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,7 +17,7 @@
 #define SOUND_SPEED_START           331.0f      // [m/s]
 #define ECHO_REPLY_TIMEOUT_START    25000       // [us]
 
-#define MAX_SAMPLE_RATE_US = 
+#define MAX_SAMPLE_RATE 20 // sample_rate_per_second 
 
 static const char* TAG = "HC-SR04";
 
@@ -185,23 +186,25 @@ int cmpfunc(const void * a, const void * b) {
 
 esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const uint64_t time_period_us, const uint32_t sampling_rate_per_second)
 {
+    if (sampling_rate_per_second > 20 || sampling_rate_per_second == 0) return ESP_ERR_INVALID_ARG;
+
     double distance_sum = 0.0;
 
     // Convert sampling rate per second to ms delay
     float delay_sample_ms = 1 / (sampling_rate_per_second / 1e3);
     
-    float* distance_array = (float*)malloc((time_period_us * (sampling_rate_per_second / 1e6)) * sizeof(float));
+    float* distance_array = (float*)malloc((time_period_us * (sampling_rate_per_second / 1e6) + 3) * sizeof(float));
     if (distance_array == NULL) return ESP_ERR_NO_MEM;
 
     uint32_t count = 0;
     const uint64_t start_time = esp_timer_get_time();
-    while(esp_timer_get_time() - start_time < time_period_us)
-    {
+    do {
         float temp_distance;
 
         esp_err_t res = measure(sensor, &temp_distance);
 
         if (res != ESP_OK) continue;
+        if (temp_distance > MAX_DISTANCE) continue;
 
         distance_array[count] = temp_distance;
         ++count;
@@ -209,7 +212,7 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
         
 
         vTaskDelay(delay_sample_ms / portTICK_PERIOD_MS);
-    }    
+    }   while(esp_timer_get_time() - start_time < time_period_us);
 
     if (count == 0)
     {
@@ -218,7 +221,9 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
         return ESP_ERR_TIMEOUT;
     }
 
-    
+    ESP_LOGI(TAG, "Distance -> sum: %f, count: %"PRIu32"", distance_sum, count);
+    distance_array = (float*)realloc(distance_array, count * sizeof(float));
+    if (distance_array == NULL) return ESP_ERR_NO_MEM;
 
     //*distance = distance_sum / count;
     float avg_distance = distance_sum / count;
@@ -252,7 +257,7 @@ void hc_sr04_init(const ultrasonic_sensor_t* sensor)
     ESP_ERROR_CHECK(gpio_set_intr_type(sensor->echo, GPIO_INTR_ANYEDGE));
 
     ESP_ERROR_CHECK(gpio_pulldown_dis(sensor->echo));
-    ESP_ERROR_CHECK(gpio_pullup_dis(sensor->echo));
+    ESP_ERROR_CHECK(gpio_pullup_en(sensor->echo));
 
     ESP_ERROR_CHECK(gpio_pulldown_dis(sensor->trigger));
     ESP_ERROR_CHECK(gpio_pullup_dis(sensor->trigger));
