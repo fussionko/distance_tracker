@@ -5,30 +5,33 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-
 #include "esp_check.h"
 
 #define TRIGGER_LOW_DELAY   2           // low delay [us]
 #define TRIGGER_HIGH_DELAY  10          // high delay [us]
 #define PING_TIMEOUT_TIME   100000      // ping timeout [us] ->0.1s
 
+// Set starting values
 #define SOUND_SPEED_START           331.0f      // [m/s]
 #define ECHO_REPLY_TIMEOUT_START    25000       // [us]
 
-//#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
-//#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
+#define MAX_SAMPLE_RATE_US = 
 
 static const char* TAG = "HC-SR04";
 
+// Speed of sound
 static float soundSpeed;            // [m/s]
+
+// Echo reply timeout
 static uint64_t echoReplyTimeout;   // [us]
 
-// // Ping timeout timer handle
+// Ping timeout timer handle
 static esp_timer_handle_t ping_timeout_timer_handle;
 
-// // Echo timeout timer handle
+// Echo timeout timer handle
 static esp_timer_handle_t echo_timeout_timer_handle;
 
+// Data queue
 QueueHandle_t queueEventData;
 
 void set_sound_speed(float temperature, float humidity)
@@ -174,7 +177,42 @@ esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance)
     return ESP_OK;
 }
 
-void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
+
+esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const uint64_t time_period_us, const uint32_t sampling_rate_per_second)
+{
+    double distance_sum = 0.0;
+
+    // Convert sampling rate per second to ms delay
+    float delay_sample_ms = 1 / (sampling_rate_per_second * 1e3);
+    
+    uint32_t count = 0;
+    const uint64_t start_time = esp_timer_get_time();
+    while(esp_timer_get_time() - start_time < time_period_us)
+    {
+        float temp_distance;
+
+        esp_err_t res = measure(sensor, &temp_distance);
+
+        if (res != ESP_OK) continue;
+
+        ++count;
+        distance_sum += temp_distance;
+
+        vTaskDelay(delay_sample_ms / portTICK_PERIOD_MS);
+    }    
+
+    if (count == 0)
+    {
+        *distance = distance_sum;
+        return ESP_ERR_TIMEOUT;
+    }
+
+    *distance = distance_sum / count;
+
+    return ESP_OK;
+}
+
+void hc_sr04_init(const ultrasonic_sensor_t* sensor)
 {
     ESP_LOGI(TAG, "Ultrasonic sensor init start");
 
@@ -227,7 +265,7 @@ void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor)
     };
     ESP_ERROR_CHECK(esp_timer_create(&echo_timeout_timer_args, &echo_timeout_timer_handle));
 
-
+    // Set starting values
     soundSpeed = SOUND_SPEED_START;
     echoReplyTimeout = ECHO_REPLY_TIMEOUT_START;
 }

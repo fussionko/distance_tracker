@@ -38,9 +38,13 @@ typedef struct
 void set_sound_speed(float temperature, float humidity);
 
 // Init sensor
-void ultrasonic_sensor_init(const ultrasonic_sensor_t* sensor);
+void hc_sr04_init(const ultrasonic_sensor_t* sensor);
 
 // Measure the distance from left and right sensor to target
 esp_err_t measure(const ultrasonic_sensor_t* sensor, float* distance);
+
+// Measure avg over time periode
+esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const uint64_t time_period_us, const uint32_t sampling_rate_per_second);
+
 
 #endif /* _ULTRASONIC_SENSOR_H__ */

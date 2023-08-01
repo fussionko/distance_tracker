@@ -27,7 +27,7 @@ static gpio_num_t sensor_gpio_pin;
 float temperature;  // [%]
 float humidity;     // [C]
 
-esp_err_t init_dht22(gpio_num_t pin)
+esp_err_t dht22_init(gpio_num_t pin)
 {
     ESP_RETURN_ON_ERROR(gpio_reset_pin(pin), TAG, "");
     ESP_RETURN_ON_ERROR(gpio_set_direction(pin, GPIO_MODE_INPUT), TAG, "");

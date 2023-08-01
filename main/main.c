@@ -1,30 +1,24 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <string.h>
-#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "esp_system.h"
-#include "sys/time.h"
-#include "ultrasonic_sensor.h"
-#include "temperature_sensor.h"
+
 #include "esp_check.h"
 
+#include "ultrasonic_sensor.h"
+#include "temperature_sensor.h"
 
-// GPIO pins
-#define GPIO_TRIGGER    25
-#define GPIO_ECHO       26
+// Ultrasonic sensor GPIO pins
+#define ULTRASONIC_GPIO_TRIGGER     25
+#define ULTRASONIC_GPIO_ECHO        26
 
-#define GPIO_DHT22      33
+// Temperature sensor GPIO pin
+#define TEMPERATURE_GPIO_DATA   33
 
-#define READ_ULTRASONIC_MS 2000 // read [ms]
+#define READ_ULTRASONIC_MS 50 // read [ms]
 #define UPDATE_SOUND_SPEED 5000 //5000000 // update speed of sound at that interval in [us]
 
 static const char* TAG = "Main script";
@@ -32,58 +26,38 @@ static const char* TAG = "Main script";
 void update_sound_speed()
 {
     // Init dht22 ultrasonic_sensor
-    ESP_ERROR_CHECK(init_dht22(GPIO_DHT22));
+    ESP_ERROR_CHECK(dht22_init(TEMPERATURE_GPIO_DATA));
 
-
-    int ret = read_dht22();
-    if (ret == 0)
-    {
-        ESP_LOGI(TAG, "123123");
-        set_sound_speed(get_temperature(), get_humidity());
-    }
-    else
-    {
-        ESP_LOGI(TAG, "111111");
-        ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
-    }
     while(1)
-    {
+    { 
+        int ret = read_dht22();
+        if (ret == 0)
+        {
+            set_sound_speed(get_temperature(), get_humidity());
+        }
+        else
+        {
+            ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
+        }
         vTaskDelay(UPDATE_SOUND_SPEED / portTICK_PERIOD_MS);
-        ret = read_dht22();
-            if (ret == 0)
-            {
-                ESP_LOGI(TAG, "123123");
-                set_sound_speed(get_temperature(), get_humidity());
-            }
-            else
-            {
-                ESP_LOGI(TAG, "111111");
-                ESP_LOGE(TAG, "ERROR update sound speed %d -> name:\n", ret);
-            }
     }
+    vTaskDelete(NULL);
 }
-
-
 
 void ultrasonic_read()
 {
-    ESP_LOGI(TAG, "Start");
+    ultrasonic_sensor_t ultrasonic_sensor = { ULTRASONIC_GPIO_TRIGGER, ULTRASONIC_GPIO_ECHO };
 
-    ultrasonic_sensor_t ultrasonic_sensor = { GPIO_TRIGGER, GPIO_ECHO };
+    // Init ultrasonic sensor
+    hc_sr04_init(&ultrasonic_sensor);
 
-    ultrasonic_sensor_init(&ultrasonic_sensor);
-
-    // Infinite loop -> prob change in future to certain amount of repetition
-    ESP_LOGI(TAG, "Start main loop");
     while(true)
     {
         float distance;
 
-        // ESP_LOGI(TAG, "Start measure");
         esp_err_t res = measure(&ultrasonic_sensor, &distance);
 
         // Handle error
-        // ESP_LOGI(TAG, "Start error handle");
         if (res != ESP_OK)
         {
             printf("Error: ");
@@ -118,7 +92,7 @@ void app_main(void)
 {
 
 
-    //xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
+    xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
     //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);
     xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
 }
