@@ -13,7 +13,7 @@
 #define TRIGGER_HIGH_DELAY  10      // high delay [us]
 #define PING_TIMEOUT_TIME   1000000     // ping timeout [us]
 
-
+#define SOUND_SPEED_START   331 // [m/s]
 
 //#define timeout_expired(start, len) ((uint32_t)get_time_us() - start) >= len
 //#define RETURN_CRITICAL(MUX, RES, STORE) do { portEXIT_CRITICAL(&MUX); STORE->error = RES; vTaskDelete(NULL); } while (0)
@@ -34,17 +34,18 @@ QueueHandle_t queueEventData;
 void set_sound_speed(float temperature, float humidity)
 {
     // ESP_LOGI(TAG, "Set sound speed");
-    // Calculate speed of sound
-    soundSpeed = 331.3 + 0.6 * temperature;
+    // Calculate speed of sound https://phys.libretexts.org/Bookshelves/University_Physics/Book%3A_University_Physics_(OpenStax)/Book%3A_University_Physics_I_-_Mechanics_Sound_Oscillations_and_Waves_(OpenStax)/17%3A_Sound/17.03%3A_Speed_of_Sound
+    soundSpeed = SOUND_SPEED_START * sqrt(1 + (temperature / 273));//331.3 + 0.6 * temperature;
 
     // Calculate max echo reply timeout
-    // t = MAX_DISTANCE / soundSpeed * 10^6;
-    echoReplyTimeout = (uint64_t)ceil((MAX_DISTANCE / soundSpeed) * 1e6) * 2;
+    // Max sound speed ~ 380m/s     Min sound speed ~ 305m/s
+    // t = ((MAX_DISTANCE * 10^6) / soundSpeed) * 2;
+    echoReplyTimeout = ((uint64_t)ceil((MAX_DISTANCE * 1e6) / soundSpeed)) << 1;//(uint64_t)ceil((MAX_DISTANCE / soundSpeed) * 1e6) * 2;
 }
 
 static void IRAM_ATTR echo_intr_handler(void* args)
 {   
-    const event_t event = { gpio_get_level(GPIO_NUM_26), esp_timer_get_time() };
+    const event_t event = { gpio_get_level(*(gpio_num_t*)args), esp_timer_get_time() };
     xQueueSendFromISR(queueEventData, &event, NULL);
 }
 

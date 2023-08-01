@@ -15,6 +15,10 @@
 #endif // GPIO_OUTPUT_LOW
 
 
+#define DHT22_MAX_TEMP_READ     80      // degrees
+#define DHT22_MIN_TEMP_READ     -40     // degrees
+#define DHT22_MAX_SAMPLING_RATE 2000    //us
+
 // DHT22 error codes
 typedef enum dht22_error { DHT22_OK = 0, DHT22_CHECKSUM_ERROR = 1, DHT22_TIMEOUT_ERROR = 2 } dht22_error;
 //static const char* dht22_error_names[] = { "DHT22_OK", "DHT22_CHECKSUM_ERROR", "DHT22_TIMEOUT_ERROR" };

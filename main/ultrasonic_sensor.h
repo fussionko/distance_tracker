@@ -12,8 +12,8 @@
 #define ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT  0x202
 #define ESP_ERR_ULTRASONIC_SENSOR_ECHO_ERROR    0x203
 
-// Max distance that sensor can read [m]
-#define MAX_DISTANCE 4
+// Max distance that sensor can read
+#define MAX_DISTANCE 4  // [m]
 
 // Event codes don't change echo start and end (gpio level)
 typedef enum event_code_t { ECHO_END = 0, ECHO_START = 1, PING_TIMEOUT = 2, ECHO_TIMEOUT = 3} event_code_t;
