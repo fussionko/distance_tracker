@@ -183,7 +183,7 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
     double distance_sum = 0.0;
 
     // Convert sampling rate per second to ms delay
-    float delay_sample_ms = 1 / (sampling_rate_per_second * 1e3);
+    float delay_sample_ms = 1 / (sampling_rate_per_second / 1e3);
     
     uint32_t count = 0;
     const uint64_t start_time = esp_timer_get_time();
@@ -206,6 +206,8 @@ esp_err_t measure_avg(const ultrasonic_sensor_t* sensor, float* distance, const 
         *distance = distance_sum;
         return ESP_ERR_TIMEOUT;
     }
+
+    ESP_LOGI(TAG, "count: %"PRIu32"", count);
 
     *distance = distance_sum / count;
 

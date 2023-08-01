@@ -87,6 +87,49 @@ void ultrasonic_read()
     }    
 }
 
+void ultrasonic_read_avg()
+{
+    ultrasonic_sensor_t ultrasonic_sensor = { ULTRASONIC_GPIO_TRIGGER, ULTRASONIC_GPIO_ECHO };
+
+    // Init ultrasonic sensor
+    hc_sr04_init(&ultrasonic_sensor);
+
+    while(true)
+    {
+        float distance;
+
+        esp_err_t res = measure_avg(&ultrasonic_sensor, &distance, 1000000, 10);
+
+        // Handle error
+        if (res != ESP_OK)
+        {
+            printf("Error: ");
+		    switch (res) 
+            {
+		    	case ESP_ERR_ULTRASONIC_SENSOR_PING:
+		    		printf("Cannot ping (device is in invalid state)\n");
+		    		break;
+		    	case ESP_ERR_ULTRASONIC_SENSOR_PING_TIMEOUT:
+		    		printf("Ping timeout (no device found)\n");
+		    		break;
+		    	case ESP_ERR_ULTRASONIC_SENSOR_ECHO_TIMEOUT:
+		    		printf("Echo timeout (i.e. distance too big)\n");
+		    		break;
+		    	default:
+		    		printf("%d\n", res);
+		    }
+        }
+        else
+        {
+            printf("distance [cm]: %0.5f\n", distance * 100);
+     
+        }
+        printf("-------------------------------\n");
+
+        vTaskDelay(READ_ULTRASONIC_MS / portTICK_PERIOD_MS);
+    }    
+}
+
 
 void app_main(void)
 {
@@ -94,5 +137,6 @@ void app_main(void)
 
     xTaskCreate(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL);
     //xTaskCreatePinnedToCore(&update_sound_speed, "Update sound speed", 2048, NULL, 2, NULL, 1);
-    xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
+    // xTaskCreate(&ultrasonic_read, "Ultrasonic read", 8192, NULL, 2, NULL);
+    xTaskCreate(&ultrasonic_read_avg, "Ultrasonic read", 8192, NULL, 2, NULL);
 }
